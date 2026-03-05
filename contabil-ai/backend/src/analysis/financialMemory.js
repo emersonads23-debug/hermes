@@ -114,7 +114,13 @@ Retorne JSON:
       response_format: { type: 'json_object' },
     });
 
-    const result = JSON.parse(response.choices[0].message.content);
+    let result;
+    try {
+      result = JSON.parse(response.choices[0].message.content);
+    } catch (parseErr) {
+      logger.error('Invalid JSON from pattern detection', { companyId, error: parseErr.message });
+      return [];
+    }
     const patterns = result.patterns || [];
 
     // Deactivate old patterns for this company
@@ -160,7 +166,7 @@ async function getActivePatterns(companyId) {
 }
 
 async function getCompanyFinancialContext(companyId) {
-  const [snapshots, patterns, insights] = await Promise.all([
+  const [snapshots, patterns, insightsResult] = await Promise.all([
     getSnapshots(companyId, { days: 30, limit: 30 }),
     getActivePatterns(companyId),
     supabase
@@ -168,9 +174,9 @@ async function getCompanyFinancialContext(companyId) {
       .select('*')
       .eq('company_id', companyId)
       .order('created_at', { ascending: false })
-      .limit(10)
-      .then((r) => r.data || []),
+      .limit(10),
   ]);
+  const insights = insightsResult.data || [];
 
   return {
     latestSnapshot: snapshots[0] || null,

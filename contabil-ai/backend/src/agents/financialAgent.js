@@ -123,7 +123,13 @@ async function runAnalysis(companyId, prompt) {
       response_format: { type: 'json_object' },
     });
 
-    const result = JSON.parse(response.choices[0].message.content);
+    let result;
+    try {
+      result = JSON.parse(response.choices[0].message.content);
+    } catch (parseErr) {
+      logger.error('Invalid JSON from financial analysis', { companyId, error: parseErr.message });
+      return { insights: [], summary: 'Erro ao processar resposta da IA.' };
+    }
 
     if (result.insights?.length) {
       await storeInsights(companyId, result.insights);

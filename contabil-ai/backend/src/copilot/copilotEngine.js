@@ -207,7 +207,12 @@ ${context.memoryContext || ''}`;
     response_format: { type: 'json_object' },
   });
 
-  return JSON.parse(response.choices[0].message.content);
+  try {
+    return JSON.parse(response.choices[0].message.content);
+  } catch (parseErr) {
+    logger.error('Invalid JSON from copilot reasoning', { error: parseErr.message });
+    return { summary: 'Erro ao processar resposta da IA.', recommendations: [], alerts: [] };
+  }
 }
 
 // ============================================================

@@ -15,7 +15,6 @@ async function recordMemoryHit(companyId, memoryId) {
   const { error } = await supabase
     .from('ai_memories')
     .update({
-      usage_count: supabase.rpc ? undefined : undefined, // handled via raw update below
       last_used_at: new Date().toISOString(),
     })
     .eq('id', memoryId);
@@ -309,18 +308,18 @@ async function incrementMetric(companyId, field) {
 
 // Get learning stats for a company (extended)
 async function getLearningStats(companyId) {
-  const [allMemories, activeMemories, deprecatedMemories, candidateMemories, recentMetrics] = await Promise.all([
+  const [allMemories, recentMetrics] = await Promise.all([
     supabase.from('ai_memories').select('id, memory_type, confidence, status, usage_count').eq('company_id', companyId),
-    supabase.from('ai_memories').select('id').eq('company_id', companyId).eq('status', 'active'),
-    supabase.from('ai_memories').select('id').eq('company_id', companyId).eq('status', 'deprecated'),
-    supabase.from('ai_memories').select('id').eq('company_id', companyId).eq('status', 'candidate'),
     supabase.from('memory_metrics').select('*').eq('company_id', companyId).order('date', { ascending: false }).limit(30),
   ]);
 
+  if (allMemories.error) logger.warn('Failed to fetch memories for stats', { companyId, error: allMemories.error.message });
+  if (recentMetrics.error) logger.warn('Failed to fetch metrics for stats', { companyId, error: recentMetrics.error.message });
+
   const all = allMemories.data || [];
-  const active = activeMemories.data || [];
-  const deprecated = deprecatedMemories.data || [];
-  const candidates = candidateMemories.data || [];
+  const active = all.filter((m) => m.status === 'active');
+  const deprecated = all.filter((m) => m.status === 'deprecated');
+  const candidates = all.filter((m) => m.status === 'candidate');
   const metrics = recentMetrics.data || [];
 
   const totalUsage = all.reduce((s, m) => s + (m.usage_count || 0), 0);

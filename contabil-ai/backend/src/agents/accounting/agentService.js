@@ -23,8 +23,8 @@ async function suggestAccountingEntry(companyId, { supplier, amount, category, a
   if (accountCode) {
     return {
       companyId,
-      debit_account: amount > 0 ? '1.1.1' : accountCode,
-      credit_account: amount > 0 ? accountCode : '1.1.1',
+      debit_account: amount > 0 ? accountCode : '1.1.1',
+      credit_account: amount > 0 ? '1.1.1' : accountCode,
       amount: Math.abs(amount),
       description: `${supplier || category} - ${source}`,
       category,
