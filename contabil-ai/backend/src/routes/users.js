@@ -21,6 +21,7 @@ const updateSchema = z.object({
   password: z.string().min(8).optional(),
   role: z.enum(['office_admin', 'accountant', 'viewer']).optional(),
   phone: z.string().min(10).max(20).nullable().optional(),
+  whatsapp_lid: z.string().max(50).nullable().optional(),
   active: z.boolean().optional(),
 });
 

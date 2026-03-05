@@ -55,14 +55,14 @@ async function handleEvolutionWebhook(req, res) {
   }
 }
 
-// Handle LID messages: resolve LID to phone, or ask user to identify
+// Handle LID messages: resolve LID to phone via whatsapp_lid mapping
 async function processLidMessage(event) {
   const { lid, messageId, messageType, message, instance: webhookInstance } = event;
   const instanceName = webhookInstance || env.evolution.instanceName;
 
-  logger.info('Processing LID message', { lid, instanceName });
+  logger.info('Processing LID message', { lid, pushName: event.pushName, instanceName });
 
-  // 1. Try to find user by whatsapp_lid
+  // Find user by whatsapp_lid
   const { data: user } = await supabase
     .from('users')
     .select('id, name, phone, active, office_id')
@@ -71,114 +71,21 @@ async function processLidMessage(event) {
     .single();
 
   if (user && user.phone) {
-    // LID already mapped — process as normal message with the real phone
+    // LID mapped — process as normal message with the real phone
     logger.info('LID resolved to phone', { lid, phone: user.phone });
-    const normalEvent = {
+    await processMessage({
       type: 'message',
       phone: user.phone,
       messageId,
       messageType,
       message,
       instance: webhookInstance,
-    };
-    await processMessage(normalEvent);
+    });
     return;
   }
 
-  // 2. Check if this is a phone number response for pending verification
-  const text = message?.conversation || message?.extendedTextMessage?.text || '';
-  const cleanNumber = text.replace(/\D/g, '');
-
-  // Check if user typed a phone number (10-15 digits)
-  if (cleanNumber.length >= 10 && cleanNumber.length <= 15) {
-    // Try to find user by this phone number
-    const { data: phoneUser } = await supabase
-      .from('users')
-      .select('id, name, phone, active')
-      .eq('phone', cleanNumber)
-      .eq('active', true)
-      .single();
-
-    if (phoneUser) {
-      // Save LID mapping
-      await supabase
-        .from('users')
-        .update({ whatsapp_lid: lid })
-        .eq('id', phoneUser.id);
-
-      logger.info('LID mapped to user', { lid, phone: cleanNumber, userId: phoneUser.id });
-
-      // Send confirmation to the real phone
-      await whatsappService.sendText(
-        phoneUser.phone,
-        `Ola ${phoneUser.name}! Seu WhatsApp foi vinculado com sucesso ao ContabilAI. A partir de agora pode me enviar suas perguntas.`,
-        instanceName
-      );
-      return;
-    }
-  }
-
-  // 3. Not mapped yet — ask user to identify by typing their phone number
-  // We can't send to LID, so we log a warning
-  // The user needs to be identified first
-  logger.warn('LID message from unknown user, cannot reply to LID', { lid, pushName: event.pushName });
-
-  // Try to find the user by pushName as a fallback hint
-  const { data: candidates } = await supabase
-    .from('users')
-    .select('phone, name')
-    .eq('active', true)
-    .is('whatsapp_lid', null)
-    .limit(50);
-
-  // If there's exactly one user with this pushName, auto-map
-  if (event.pushName && candidates) {
-    const nameMatches = candidates.filter(c =>
-      c.name && c.name.toLowerCase().includes(event.pushName.toLowerCase())
-    );
-
-    if (nameMatches.length === 1) {
-      const match = nameMatches[0];
-      // Auto-map and send confirmation
-      await supabase
-        .from('users')
-        .update({ whatsapp_lid: lid })
-        .eq('phone', match.phone);
-
-      logger.info('LID auto-mapped by pushName', { lid, phone: match.phone, name: match.name });
-
-      await whatsappService.sendText(
-        match.phone,
-        `Ola ${match.name}! Seu WhatsApp foi identificado automaticamente e vinculado ao ContabilAI. Pode enviar suas perguntas!`,
-        instanceName
-      );
-
-      // Now process the original message
-      const normalEvent = {
-        type: 'message',
-        phone: match.phone,
-        messageId: event.messageId,
-        messageType: event.messageType,
-        message: event.message,
-        instance: webhookInstance,
-      };
-      await processMessage(normalEvent);
-      return;
-    }
-
-    // Multiple matches or none — send message to all candidates asking them to type their phone
-    // Actually, we can't identify who sent the message, so just log it
-    if (nameMatches.length > 1) {
-      logger.info('Multiple users match pushName, cannot auto-map', {
-        lid,
-        pushName: event.pushName,
-        candidates: nameMatches.map(c => c.phone),
-      });
-    }
-  }
-
-  // Last resort: log the LID for manual mapping by admin
-  logger.warn('Cannot resolve LID to phone. Admin needs to manually set whatsapp_lid for this user.', {
+  // LID not mapped — log for admin to link via Users page
+  logger.warn('LID not mapped to any user. Admin must set whatsapp_lid in Users page.', {
     lid,
     pushName: event.pushName,
     instanceName,

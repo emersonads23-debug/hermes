@@ -1,7 +1,7 @@
 const bcrypt = require('bcryptjs');
 const supabase = require('../config/supabase');
 
-const USER_SELECT = 'id, name, email, phone, role, active, office_id, created_at, office:offices(name), user_companies(company:companies(id, name))';
+const USER_SELECT = 'id, name, email, phone, whatsapp_lid, role, active, office_id, created_at, office:offices(name), user_companies(company:companies(id, name))';
 
 async function list(req, res) {
   let query = supabase

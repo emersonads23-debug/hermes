@@ -29,7 +29,7 @@ export default function Users() {
   }
 
   function openEdit(u) {
-    setForm({ name: u.name, email: u.email, role: u.role, phone: u.phone || '', active: u.active });
+    setForm({ name: u.name, email: u.email, role: u.role, phone: u.phone || '', whatsapp_lid: u.whatsapp_lid || '', active: u.active });
     setError('');
     setModal(u.id);
   }
@@ -144,6 +144,12 @@ export default function Users() {
               <label>WhatsApp (com codigo do pais + DDD)</label>
               <input value={form.phone || ''} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="5511999999999" />
             </div>
+            {modal !== 'create' && (
+              <div className="form-group">
+                <label>WhatsApp LID (preenchido automaticamente ou pelo admin)</label>
+                <input value={form.whatsapp_lid || ''} onChange={(e) => setForm({ ...form, whatsapp_lid: e.target.value })} placeholder="Identificador LID do Evolution" />
+              </div>
+            )}
             <div className="form-group">
               <label>{modal === 'create' ? 'Senha' : 'Nova Senha (deixe vazio para manter)'}</label>
               <input type="password" value={form.password || ''} onChange={(e) => setForm({ ...form, password: e.target.value })} {...(modal === 'create' ? { required: true } : {})} />
