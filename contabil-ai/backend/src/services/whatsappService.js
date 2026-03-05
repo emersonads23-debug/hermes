@@ -50,30 +50,37 @@ function parseWebhookEvent(body) {
     if (key.remoteJid.endsWith('@g.us')) return { type: 'group_message' };
     if (key.fromMe) return { type: 'own_message' };
 
-    // Skip LID (Linked Device ID) messages — not a real phone number
+    // Handle LID (Linked Device ID) messages
     if (key.remoteJid.endsWith('@lid')) {
-      logger.info('Skipping LID message, checking for phone in pushName/participant', {
-        remoteJid: key.remoteJid,
-        participant: data.participant,
-        pushName: data.pushName,
-      });
+      const lid = key.remoteJid.replace('@lid', '');
+      const messageId = key.id;
+
       // Try to get the real phone from participant field
       const participant = data.participant || key.participant;
       if (participant && participant.includes('@s.whatsapp.net')) {
-        // Use participant as the real phone
         const phone = participant.replace('@s.whatsapp.net', '');
-        const messageId = key.id;
-
         let messageType = 'text';
         if (message.audioMessage) messageType = 'audio';
         else if (message.imageMessage) messageType = 'image';
         else if (message.documentMessage) messageType = 'document';
-        else if (message.videoMessage) messageType = 'video';
-        else if (message.stickerMessage) messageType = 'sticker';
-
         return { type: 'message', phone, messageId, messageType, message, instance };
       }
-      return { type: 'lid_message', raw: body };
+
+      // Return as lid_message with all needed info for resolution
+      let messageType = 'text';
+      if (message.audioMessage) messageType = 'audio';
+      else if (message.imageMessage) messageType = 'image';
+      else if (message.documentMessage) messageType = 'document';
+
+      return {
+        type: 'lid_message',
+        lid,
+        messageId,
+        messageType,
+        message,
+        instance,
+        pushName: data.pushName,
+      };
     }
 
     const phone = key.remoteJid.replace('@s.whatsapp.net', '');

@@ -12,52 +12,41 @@ const supabase = require('../config/supabase');
 const env = require('../config/env');
 const logger = require('../config/logger');
 
+// In-memory cache for pending LID verifications (lid -> { instance, timestamp })
+const pendingLidVerifications = new Map();
+const LID_VERIFY_TTL = 10 * 60 * 1000; // 10 minutes
+
 async function handleEvolutionWebhook(req, res) {
-  // Always respond 200 quickly to Evolution (avoid webhook retries)
   res.status(200).json({ status: 'received' });
 
   try {
-    // Debug: log raw webhook payload
     const d = req.body.data || {};
-    logger.info('Webhook raw payload', {
+    logger.info('Webhook received', {
       event: req.body.event,
       instance: req.body.instance,
-      dataKeys: Object.keys(d),
       remoteJid: d.key?.remoteJid,
-      fromMe: d.key?.fromMe,
-      participant: d.key?.participant || d.participant,
-      owner: d.owner,
-      source: typeof d.source === 'object' ? JSON.stringify(d.source).substring(0, 500) : d.source,
       pushName: d.pushName,
-      messageType: d.messageType,
-      messageKeys: d.message ? Object.keys(d.message) : 'no message',
     });
 
-    // Parse the event
     const event = whatsappService.parseWebhookEvent(req.body);
-
-    logger.info('Webhook event parsed', { type: event.type, instance: event.instance, phone: event.phone });
 
     switch (event.type) {
       case 'message':
         await processMessage(event);
         break;
-
+      case 'lid_message':
+        await processLidMessage(event);
+        break;
       case 'connection_update':
         logger.info('WhatsApp connection update', { state: event.state, instance: event.instance });
         break;
-
       case 'qrcode':
         logger.info('QR code updated for instance', { instance: event.instance });
         break;
-
       case 'group_message':
       case 'own_message':
       case 'status_broadcast':
-      case 'lid_message':
-        // Silently ignore
         break;
-
       default:
         logger.debug('Unhandled webhook event', { type: event.type });
     }
@@ -66,13 +55,141 @@ async function handleEvolutionWebhook(req, res) {
   }
 }
 
+// Handle LID messages: resolve LID to phone, or ask user to identify
+async function processLidMessage(event) {
+  const { lid, messageId, messageType, message, instance: webhookInstance } = event;
+  const instanceName = webhookInstance || env.evolution.instanceName;
+
+  logger.info('Processing LID message', { lid, instanceName });
+
+  // 1. Try to find user by whatsapp_lid
+  const { data: user } = await supabase
+    .from('users')
+    .select('id, name, phone, active, office_id')
+    .eq('whatsapp_lid', lid)
+    .eq('active', true)
+    .single();
+
+  if (user && user.phone) {
+    // LID already mapped — process as normal message with the real phone
+    logger.info('LID resolved to phone', { lid, phone: user.phone });
+    const normalEvent = {
+      type: 'message',
+      phone: user.phone,
+      messageId,
+      messageType,
+      message,
+      instance: webhookInstance,
+    };
+    await processMessage(normalEvent);
+    return;
+  }
+
+  // 2. Check if this is a phone number response for pending verification
+  const text = message?.conversation || message?.extendedTextMessage?.text || '';
+  const cleanNumber = text.replace(/\D/g, '');
+
+  // Check if user typed a phone number (10-15 digits)
+  if (cleanNumber.length >= 10 && cleanNumber.length <= 15) {
+    // Try to find user by this phone number
+    const { data: phoneUser } = await supabase
+      .from('users')
+      .select('id, name, phone, active')
+      .eq('phone', cleanNumber)
+      .eq('active', true)
+      .single();
+
+    if (phoneUser) {
+      // Save LID mapping
+      await supabase
+        .from('users')
+        .update({ whatsapp_lid: lid })
+        .eq('id', phoneUser.id);
+
+      logger.info('LID mapped to user', { lid, phone: cleanNumber, userId: phoneUser.id });
+
+      // Send confirmation to the real phone
+      await whatsappService.sendText(
+        phoneUser.phone,
+        `Ola ${phoneUser.name}! Seu WhatsApp foi vinculado com sucesso ao ContabilAI. A partir de agora pode me enviar suas perguntas.`,
+        instanceName
+      );
+      return;
+    }
+  }
+
+  // 3. Not mapped yet — ask user to identify by typing their phone number
+  // We can't send to LID, so we log a warning
+  // The user needs to be identified first
+  logger.warn('LID message from unknown user, cannot reply to LID', { lid, pushName: event.pushName });
+
+  // Try to find the user by pushName as a fallback hint
+  const { data: candidates } = await supabase
+    .from('users')
+    .select('phone, name')
+    .eq('active', true)
+    .is('whatsapp_lid', null)
+    .limit(50);
+
+  // If there's exactly one user with this pushName, auto-map
+  if (event.pushName && candidates) {
+    const nameMatches = candidates.filter(c =>
+      c.name && c.name.toLowerCase().includes(event.pushName.toLowerCase())
+    );
+
+    if (nameMatches.length === 1) {
+      const match = nameMatches[0];
+      // Auto-map and send confirmation
+      await supabase
+        .from('users')
+        .update({ whatsapp_lid: lid })
+        .eq('phone', match.phone);
+
+      logger.info('LID auto-mapped by pushName', { lid, phone: match.phone, name: match.name });
+
+      await whatsappService.sendText(
+        match.phone,
+        `Ola ${match.name}! Seu WhatsApp foi identificado automaticamente e vinculado ao ContabilAI. Pode enviar suas perguntas!`,
+        instanceName
+      );
+
+      // Now process the original message
+      const normalEvent = {
+        type: 'message',
+        phone: match.phone,
+        messageId: event.messageId,
+        messageType: event.messageType,
+        message: event.message,
+        instance: webhookInstance,
+      };
+      await processMessage(normalEvent);
+      return;
+    }
+
+    // Multiple matches or none — send message to all candidates asking them to type their phone
+    // Actually, we can't identify who sent the message, so just log it
+    if (nameMatches.length > 1) {
+      logger.info('Multiple users match pushName, cannot auto-map', {
+        lid,
+        pushName: event.pushName,
+        candidates: nameMatches.map(c => c.phone),
+      });
+    }
+  }
+
+  // Last resort: log the LID for manual mapping by admin
+  logger.warn('Cannot resolve LID to phone. Admin needs to manually set whatsapp_lid for this user.', {
+    lid,
+    pushName: event.pushName,
+    instanceName,
+  });
+}
+
 async function processMessage(event) {
   const { phone, messageId, messageType, message, instance: webhookInstance } = event;
 
-  // Resolve user context - try by phone first, then by instance
   const context = await resolveContext(phone, webhookInstance);
   if (!context) {
-    // Try to find which instance to reply from
     const instanceName = await resolveInstanceName(webhookInstance);
     await whatsappService.sendText(
       phone,
@@ -83,52 +200,50 @@ async function processMessage(event) {
   }
 
   const inst = context.instanceName;
+  const replyPhone = context.userPhone || phone;
 
   // Show "processing" reaction
-  await whatsappService.sendReaction(phone, messageId, '\u23F3', inst);
+  await whatsappService.sendReaction(replyPhone, messageId, '\u23F3', inst);
 
-  // Log incoming message
-  await logMessage(context, phone, 'incoming', message, messageType);
+  await logMessage(context, replyPhone, 'incoming', message, messageType);
 
   let responseText;
 
   try {
     switch (messageType) {
       case 'audio':
-        responseText = await handleAudio(message, context, phone, messageId);
+        responseText = await handleAudio(message, context, replyPhone, messageId);
         break;
       case 'image':
-        responseText = await handleImage(message, context, phone, messageId);
+        responseText = await handleImage(message, context, replyPhone, messageId);
         break;
       case 'document':
-        responseText = await handleDocument(message, context, phone, messageId);
+        responseText = await handleDocument(message, context, replyPhone, messageId);
         break;
       default:
         const text = message.conversation || message.extendedTextMessage?.text || '';
         if (!text.trim()) {
           responseText = 'Desculpe, nao consegui entender essa mensagem. Envie um texto, audio, imagem ou PDF.';
         } else {
-          responseText = await handleText(text, context, phone);
+          responseText = await handleText(text, context, replyPhone);
         }
     }
   } catch (err) {
-    logger.error('Message processing failed', { phone, messageType, error: err.message });
+    logger.error('Message processing failed', { phone: replyPhone, messageType, error: err.message });
     responseText = 'Desculpe, ocorreu um erro ao processar sua mensagem. Tente novamente em instantes.';
 
-    // Auto-escalate processing errors
     await escalationService.createEscalation({
       officeId: context.officeId,
       companyId: context.companyId,
-      userPhone: phone,
+      userPhone: replyPhone,
       subject: 'Erro no processamento de mensagem',
       description: `Tipo: ${messageType}\nErro: ${err.message}`,
     });
   }
 
-  // Send response and clear reaction
-  await whatsappService.sendText(phone, responseText, inst);
-  await whatsappService.sendReaction(phone, messageId, '', inst);
-  await logMessage(context, phone, 'outgoing', { text: responseText }, 'text');
+  await whatsappService.sendText(replyPhone, responseText, inst);
+  await whatsappService.sendReaction(replyPhone, messageId, '', inst);
+  await logMessage(context, replyPhone, 'outgoing', { text: responseText }, 'text');
 }
 
 async function handleText(text, context, phone) {
@@ -273,27 +388,28 @@ async function resolveContext(phone, webhookInstance) {
     .eq('active', true)
     .single();
 
-  logger.info('resolveContext: user lookup result', { found: !!user, userId: user?.id, userError: userError?.message });
-
-  if (!user) return null;
+  if (!user) {
+    logger.info('resolveContext: user not found by phone', { phone });
+    return null;
+  }
 
   // 2. Find companies linked to this user via user_companies
-  const { data: userCompanies, error: ucError } = await supabase
+  const { data: userCompanies } = await supabase
     .from('user_companies')
     .select('company:companies(*, office:offices(*))')
     .eq('user_id', user.id);
 
-  logger.info('resolveContext: user_companies result', { count: userCompanies?.length, ucError: ucError?.message });
+  if (!userCompanies || userCompanies.length === 0) {
+    logger.info('resolveContext: no companies linked', { userId: user.id });
+    return null;
+  }
 
-  if (!userCompanies || userCompanies.length === 0) return null;
-
-  // Use first company (user may have multiple)
   const company = userCompanies[0].company;
   if (!company) return null;
 
   const office = company.office;
 
-  // 3. Check for ERP integration (try company-level first, then office-level)
+  // 3. Check for ERP integration
   let integration = null;
   const { data: companyIntegration } = await supabase
     .from('integration_tokens')
@@ -318,6 +434,7 @@ async function resolveContext(phone, webhookInstance) {
     companyId: company.id,
     userId: user.id,
     userName: user.name,
+    userPhone: user.phone,
     officeName: office?.name || 'Escritorio',
     botName: office?.bot_name || 'ContabilAI',
     instanceName: office?.evolution_instance_name || webhookInstance || null,
@@ -325,7 +442,6 @@ async function resolveContext(phone, webhookInstance) {
   };
 }
 
-// Resolve instance name from webhook instance field (for unknown contacts)
 async function resolveInstanceName(webhookInstance) {
   if (!webhookInstance) return null;
   const { data: office } = await supabase
