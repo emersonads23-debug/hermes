@@ -28,7 +28,7 @@ export default function FinancialDashboard() {
 
   useEffect(() => {
     api.get('/companies').then((res) => {
-      const list = res.data.companies || [];
+      const list = (res.data.companies || []).sort((a, b) => a.name.localeCompare(b.name));
       setCompanies(list);
       if (list.length > 0) setSelectedCompany(list[0].id);
     }).catch(() => {});
