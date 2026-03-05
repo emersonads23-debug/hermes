@@ -1,0 +1,21 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci --only=production
+
+COPY src/ ./src/
+
+RUN mkdir -p logs
+
+USER node
+
+CMD ["node", "-e", "\
+  require('dotenv').config();\
+  const { startWorkers } = require('./src/queues/workers');\
+  const logger = require('./src/config/logger');\
+  startWorkers();\
+  logger.info('Worker process started (standalone)');\
+  process.on('SIGTERM', () => { logger.info('Worker shutting down'); process.exit(0); });\
+"]
