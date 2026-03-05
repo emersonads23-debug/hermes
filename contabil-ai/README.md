@@ -36,13 +36,37 @@ Assistente financeiro inteligente para escritorios de contabilidade via WhatsApp
 
 ## Modulos
 
-### Financial Agent Engine (`backend/src/agents/`)
-Motor de inteligencia financeira que analisa dados e gera insights:
-- Analise de fluxo de caixa
-- Tendencias de receita/despesa
-- Envelhecimento de contas a receber
-- Previsao de contas a pagar
-- Gera alertas, recomendacoes e resumos
+### Multi-Agent Financial Architecture (`backend/src/agents/`)
+Sistema de agentes IA especializados coordenados por um orquestrador:
+
+**Orchestrator** (`orchestrator/orchestratorAgent.js`):
+- Recebe eventos e decide quais agentes devem ser acionados
+- Despacha tarefas para filas BullMQ de cada agente
+- Routing table configuravel por tipo de evento
+
+**Agentes especializados** (cada um com `agent.js`, `agentService.js`, `agentHandlers.js`):
+
+| Agente | Responsabilidade | Eventos |
+|--------|-----------------|---------|
+| DocumentAgent | Classificacao e extracao de documentos | `document_received` -> `document_processed` |
+| ReconciliationAgent | Conciliacao de transacoes | `transaction_detected` -> `reconciliation_completed` |
+| AccountingAgent | Sugestao de lancamentos contabeis | `reconciliation_completed` -> `accounting_entry_suggested` |
+| FinancialAgent | Analise financeira (fluxo de caixa, tendencias) | `financial_analysis_requested` -> `financial_alert` |
+| RiskAgent | Deteccao e avaliacao de riscos | `financial_alert` -> alertas criticos |
+| MemoryAgent | Aprendizado e gestao de memorias | `memory_update_requested` -> `memory_learned` |
+
+**Fluxo de eventos**:
+```
+documento recebido -> DocumentAgent -> document_processed
+  -> AccountingAgent (sugere lancamento)
+  -> MemoryAgent (aprende classificacao)
+  -> ReconciliationAgent (se transacao detectada)
+    -> reconciliation_completed
+      -> AccountingAgent (lancamento)
+      -> MemoryAgent (aprende reconciliacao)
+```
+
+**Escalabilidade**: cada agente roda como worker BullMQ independente, escalavel horizontalmente
 
 ### Financial Memory (`backend/src/analysis/`)
 Sistema de memoria que armazena historico financeiro:
@@ -103,6 +127,12 @@ Filas de processamento com Redis + BullMQ:
 - `copilot_analysis` - avaliacao autonoma do copilot
 - `memory_learning` - aprendizado continuo e manutencao de memorias
 - `alerts` - entrega de alertas
+- `document_agent_queue` - agente de documentos
+- `reconciliation_agent_queue` - agente de conciliacao
+- `accounting_agent_queue` - agente contabil
+- `financial_agent_queue` - agente financeiro
+- `risk_agent_queue` - agente de riscos
+- `memory_agent_queue` - agente de memoria
 
 ### Human Task System
 Fila de tarefas para revisao humana:
@@ -246,7 +276,16 @@ Configurar no crontab do servidor:
 contabil-ai/
 ├── backend/
 │   └── src/
-│       ├── agents/          # Financial Agent Engine
+│       ├── agents/          # Multi-Agent Architecture
+│       │   ├── orchestrator/  # Event routing orchestrator
+│       │   ├── document/      # DocumentAgent
+│       │   ├── reconciliation/ # ReconciliationAgent
+│       │   ├── accounting/    # AccountingAgent
+│       │   ├── financial/     # FinancialAgent
+│       │   ├── risk/          # RiskAgent
+│       │   ├── memory/        # MemoryAgent
+│       │   ├── baseAgent.js   # Shared base class
+│       │   └── financialAgent.js # Legacy financial analysis
 │       ├── alerts/          # Alert Engine
 │       ├── analysis/        # Financial Memory + Daily Analysis
 │       ├── config/          # Database, Supabase, Logger, OpenAI

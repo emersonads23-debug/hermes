@@ -112,7 +112,51 @@ function startWorkers() {
     return alertEngine.deliverAlert(job.data);
   }, 5);
 
-  logger.info('All queue workers started');
+  // === Multi-Agent Workers ===
+
+  // Document Agent worker
+  registerWorker(QUEUES.DOCUMENT_AGENT, async (job) => {
+    logger.info('DocumentAgent processing', { jobId: job.id, type: job.name });
+    const { handleJob } = require('../agents/document/agentHandlers');
+    return handleJob(job);
+  }, 3);
+
+  // Reconciliation Agent worker
+  registerWorker(QUEUES.RECONCILIATION_AGENT, async (job) => {
+    logger.info('ReconciliationAgent processing', { jobId: job.id, type: job.name });
+    const { handleJob } = require('../agents/reconciliation/agentHandlers');
+    return handleJob(job);
+  }, 2);
+
+  // Accounting Agent worker
+  registerWorker(QUEUES.ACCOUNTING_AGENT, async (job) => {
+    logger.info('AccountingAgent processing', { jobId: job.id, type: job.name });
+    const { handleJob } = require('../agents/accounting/agentHandlers');
+    return handleJob(job);
+  }, 2);
+
+  // Financial Agent worker
+  registerWorker(QUEUES.FINANCIAL_AGENT, async (job) => {
+    logger.info('FinancialAgent processing', { jobId: job.id, type: job.name });
+    const { handleJob } = require('../agents/financial/agentHandlers');
+    return handleJob(job);
+  }, 2);
+
+  // Risk Agent worker
+  registerWorker(QUEUES.RISK_AGENT, async (job) => {
+    logger.info('RiskAgent processing', { jobId: job.id, type: job.name });
+    const { handleJob } = require('../agents/risk/agentHandlers');
+    return handleJob(job);
+  }, 2);
+
+  // Memory Agent worker
+  registerWorker(QUEUES.MEMORY_AGENT, async (job) => {
+    logger.info('MemoryAgent processing', { jobId: job.id, type: job.name });
+    const { handleJob } = require('../agents/memory/agentHandlers');
+    return handleJob(job);
+  }, 2);
+
+  logger.info('All queue workers started (including multi-agent workers)');
 }
 
 module.exports = { startWorkers };

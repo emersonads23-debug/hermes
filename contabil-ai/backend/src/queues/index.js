@@ -16,6 +16,13 @@ const QUEUES = {
   COPILOT_ANALYSIS: 'copilot_analysis',
   MEMORY_LEARNING: 'memory_learning',
   ALERTS: 'alerts',
+  // Agent queues
+  DOCUMENT_AGENT: 'document_agent_queue',
+  RECONCILIATION_AGENT: 'reconciliation_agent_queue',
+  ACCOUNTING_AGENT: 'accounting_agent_queue',
+  FINANCIAL_AGENT: 'financial_agent_queue',
+  RISK_AGENT: 'risk_agent_queue',
+  MEMORY_AGENT: 'memory_agent_queue',
 };
 
 const queues = {};
@@ -105,6 +112,11 @@ async function addMemoryLearningJob(jobType = 'daily', data = {}) {
   return getQueue(QUEUES.MEMORY_LEARNING).add(jobType, data);
 }
 
+async function addAgentEvent(eventType, eventData) {
+  const orchestrator = require('../agents/orchestrator/orchestratorAgent');
+  return orchestrator.receiveEvent(eventType, eventData);
+}
+
 async function addAlertJob(alertData) {
   return getQueue(QUEUES.ALERTS).add('send-alert', alertData, {
     priority: alertData.severity === 'critical' ? 1 : 3,
@@ -146,6 +158,7 @@ module.exports = {
   addFinancialAnalysisJob,
   addCopilotJob,
   addMemoryLearningJob,
+  addAgentEvent,
   addAlertJob,
   getQueueStats,
   closeAll,
