@@ -77,7 +77,12 @@ router.post('/:officeId/create', asyncHandler(async (req, res) => {
     logger.info('Evolution instance created for office', { officeId: req.params.officeId, instanceName });
     res.status(201).json({ instance: instanceName, ...response.data });
   } catch (err) {
-    if (err.response?.status === 403 || err.response?.status === 409) {
+    const status = err.response?.status;
+    if (status === 401) {
+      logger.error('Evolution API authentication failed - check EVOLUTION_API_KEY');
+      return res.status(502).json({ error: 'Falha na autenticacao com Evolution API. Verifique a chave de API.' });
+    }
+    if (status === 403 || status === 409) {
       // Instance already exists in Evolution, just save reference
       await supabase
         .from('offices')
@@ -86,8 +91,8 @@ router.post('/:officeId/create', asyncHandler(async (req, res) => {
 
       return res.status(201).json({ instance: instanceName, existing: true });
     }
-    logger.error('Failed to create Evolution instance', { error: err.message });
-    res.status(500).json({ error: err.response?.data?.message || err.message });
+    logger.error('Failed to create Evolution instance', { error: err.message, status });
+    res.status(502).json({ error: err.response?.data?.message || err.response?.data?.error || 'Erro ao comunicar com Evolution API' });
   }
 }));
 
@@ -107,7 +112,10 @@ router.get('/:officeId/qrcode', asyncHandler(async (req, res) => {
     const response = await evoApi.get(`/instance/connect/${office.evolution_instance_name}`);
     res.json(response.data);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    if (err.response?.status === 401) {
+      return res.status(502).json({ error: 'Falha na autenticacao com Evolution API' });
+    }
+    res.status(502).json({ error: err.response?.data?.message || 'Erro ao obter QR Code' });
   }
 }));
 
@@ -127,7 +135,10 @@ router.post('/:officeId/disconnect', asyncHandler(async (req, res) => {
     await evoApi.delete(`/instance/logout/${office.evolution_instance_name}`);
     res.json({ message: 'Instancia desconectada' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    if (err.response?.status === 401) {
+      return res.status(502).json({ error: 'Falha na autenticacao com Evolution API' });
+    }
+    res.status(502).json({ error: err.response?.data?.message || 'Erro ao desconectar' });
   }
 }));
 

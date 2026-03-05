@@ -13,6 +13,7 @@ export default function Offices() {
   const [evoLoading, setEvoLoading] = useState(false);
   const [instanceName, setInstanceName] = useState('');
   const [qrCode, setQrCode] = useState(null);
+  const [evoError, setEvoError] = useState('');
 
   function openCreate() {
     setForm({ name: '', cnpj: '', email: '', phone: '', adminName: '', adminEmail: '', adminPassword: '' });
@@ -56,6 +57,7 @@ export default function Offices() {
     setEvoStatus(null);
     setQrCode(null);
     setInstanceName('');
+    setEvoError('');
     try {
       const res = await api.get(`/evolution/${office.id}/status`);
       setEvoStatus(res.data);
@@ -68,36 +70,39 @@ export default function Offices() {
   async function handleCreateInstance() {
     if (!instanceName.trim()) return;
     setEvoLoading(true);
+    setEvoError('');
     try {
       await api.post(`/evolution/${evoModal.id}/create`, { instanceName: instanceName.trim() });
       const res = await api.get(`/evolution/${evoModal.id}/status`);
       setEvoStatus(res.data);
       await fetchAll();
     } catch (err) {
-      alert(err.response?.data?.error || 'Erro ao criar instancia');
+      setEvoError(err.response?.data?.error || 'Erro ao criar instancia');
     }
     setEvoLoading(false);
   }
 
   async function handleGetQrCode() {
     setEvoLoading(true);
+    setEvoError('');
     try {
       const res = await api.get(`/evolution/${evoModal.id}/qrcode`);
       setQrCode(res.data);
     } catch (err) {
-      alert(err.response?.data?.error || 'Erro ao obter QR Code');
+      setEvoError(err.response?.data?.error || 'Erro ao obter QR Code');
     }
     setEvoLoading(false);
   }
 
   async function handleDisconnect() {
     setEvoLoading(true);
+    setEvoError('');
     try {
       await api.post(`/evolution/${evoModal.id}/disconnect`);
       const res = await api.get(`/evolution/${evoModal.id}/status`);
       setEvoStatus(res.data);
     } catch (err) {
-      alert(err.response?.data?.error || 'Erro ao desconectar');
+      setEvoError(err.response?.data?.error || 'Erro ao desconectar');
     }
     setEvoLoading(false);
   }
@@ -105,12 +110,13 @@ export default function Offices() {
   async function handleRemoveInstance() {
     if (!confirm('Tem certeza que deseja remover a instancia?')) return;
     setEvoLoading(true);
+    setEvoError('');
     try {
       await api.delete(`/evolution/${evoModal.id}/instance`);
       setEvoStatus({ configured: false, state: 'not_configured' });
       await fetchAll();
     } catch (err) {
-      alert(err.response?.data?.error || 'Erro ao remover instancia');
+      setEvoError(err.response?.data?.error || 'Erro ao remover instancia');
     }
     setEvoLoading(false);
   }
@@ -214,6 +220,7 @@ export default function Offices() {
       {evoModal && (
         <Modal title={`WhatsApp - ${evoModal.name}`} onClose={() => { setEvoModal(null); setQrCode(null); }}>
           {evoLoading && <div className="loading">Carregando...</div>}
+          {evoError && <div className="alert alert-danger">{evoError}</div>}
 
           {evoStatus && !evoStatus.configured && (
             <div>

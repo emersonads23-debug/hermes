@@ -17,6 +17,7 @@ services:
       - REDIS_PORT=6379
       - REDIS_PASSWORD=${REDIS_PASSWORD:-}
       - EVOLUTION_API_URL=http://evolution:8080
+      - EVOLUTION_API_KEY=${EVOLUTION_API_KEY:?EVOLUTION_API_KEY must be set}
       - N8N_WEBHOOK_URL=http://n8n:5678/webhook
     depends_on:
       redis:
