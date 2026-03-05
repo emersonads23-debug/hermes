@@ -15,27 +15,35 @@ export default function Users() {
   const { user: currentUser } = useAuth();
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState({});
+  const [error, setError] = useState('');
 
   function openCreate() {
     setForm({ name: '', email: '', password: '', role: 'accountant' });
+    setError('');
     setModal('create');
   }
 
   function openEdit(u) {
     setForm({ name: u.name, email: u.email, role: u.role, active: u.active });
+    setError('');
     setModal(u.id);
   }
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (modal === 'create') {
-      await create(form);
-    } else {
-      const payload = { ...form };
-      if (!payload.password) delete payload.password;
-      await update(modal, payload);
+    setError('');
+    try {
+      if (modal === 'create') {
+        await create(form);
+      } else {
+        const payload = { ...form };
+        if (!payload.password) delete payload.password;
+        await update(modal, payload);
+      }
+      setModal(null);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Erro ao salvar usuario');
     }
-    setModal(null);
   }
 
   if (loading) return <div className="loading">Carregando...</div>;
@@ -82,6 +90,7 @@ export default function Users() {
       {modal && (
         <Modal title={modal === 'create' ? 'Novo Usuario' : 'Editar Usuario'} onClose={() => setModal(null)}>
           <form onSubmit={handleSubmit}>
+            {error && <div className="alert alert-danger">{error}</div>}
             <div className="form-group">
               <label>Nome</label>
               <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />

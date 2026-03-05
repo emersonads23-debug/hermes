@@ -6,25 +6,33 @@ export default function Companies() {
   const { data: companies, loading, create, update, remove } = useCrud('/companies');
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState({});
+  const [error, setError] = useState('');
 
   function openCreate() {
     setForm({ name: '', cnpj: '', email: '', phone: '' });
+    setError('');
     setModal('create');
   }
 
   function openEdit(company) {
     setForm({ name: company.name, cnpj: company.cnpj, email: company.email || '', phone: company.phone || '' });
+    setError('');
     setModal(company.id);
   }
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (modal === 'create') {
-      await create(form);
-    } else {
-      await update(modal, form);
+    setError('');
+    try {
+      if (modal === 'create') {
+        await create(form);
+      } else {
+        await update(modal, form);
+      }
+      setModal(null);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Erro ao salvar empresa');
     }
-    setModal(null);
   }
 
   if (loading) return <div className="loading">Carregando...</div>;
@@ -67,6 +75,7 @@ export default function Companies() {
       {modal && (
         <Modal title={modal === 'create' ? 'Nova Empresa' : 'Editar Empresa'} onClose={() => setModal(null)}>
           <form onSubmit={handleSubmit}>
+            {error && <div className="alert alert-danger">{error}</div>}
             <div className="form-group">
               <label>Nome</label>
               <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />

@@ -32,25 +32,28 @@ export default function Tasks() {
   const [total, setTotal] = useState(0);
 
   useEffect(() => {
-    loadTasks();
+    async function fetchTasks() {
+      try {
+        const params = filter ? `?status=${filter}` : '';
+        const res = await api.get(`/tasks${params}`);
+        setTasks(res.data.tasks || []);
+        setTotal(res.data.total || 0);
+      } catch {
+        setTasks([]);
+      }
+    }
+    fetchTasks();
     api.get('/tasks/stats').then((res) => setStats(res.data)).catch(() => {});
   }, [filter]);
-
-  async function loadTasks() {
-    try {
-      const params = filter ? `?status=${filter}` : '';
-      const res = await api.get(`/tasks${params}`);
-      setTasks(res.data.tasks || []);
-      setTotal(res.data.total || 0);
-    } catch {
-      setTasks([]);
-    }
-  }
 
   async function updateStatus(taskId, status) {
     try {
       await api.put(`/tasks/${taskId}`, { status });
-      loadTasks();
+      const params = filter ? `?status=${filter}` : '';
+      const res = await api.get(`/tasks${params}`);
+      setTasks(res.data.tasks || []);
+      setTotal(res.data.total || 0);
+      api.get('/tasks/stats').then((r) => setStats(r.data)).catch(() => {});
     } catch {
       // ignore
     }

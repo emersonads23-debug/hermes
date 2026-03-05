@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const [stats, setStats] = useState({ offices: 0, companies: 0, users: 0, escalations: 0 });
+  const [stats, setStats] = useState({ companies: 0, users: 0, escalations: 0 });
 
   useEffect(() => {
     async function loadStats() {

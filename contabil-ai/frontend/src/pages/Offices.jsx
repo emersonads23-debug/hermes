@@ -6,25 +6,33 @@ export default function Offices() {
   const { data: offices, loading, create, update, remove } = useCrud('/offices');
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState({});
+  const [error, setError] = useState('');
 
   function openCreate() {
     setForm({ name: '', cnpj: '', email: '', phone: '', adminName: '', adminEmail: '', adminPassword: '' });
+    setError('');
     setModal('create');
   }
 
   function openEdit(office) {
     setForm({ name: office.name, cnpj: office.cnpj, email: office.email, phone: office.phone || '' });
+    setError('');
     setModal(office.id);
   }
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (modal === 'create') {
-      await create(form);
-    } else {
-      await update(modal, form);
+    setError('');
+    try {
+      if (modal === 'create') {
+        await create(form);
+      } else {
+        await update(modal, form);
+      }
+      setModal(null);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Erro ao salvar escritorio');
     }
-    setModal(null);
   }
 
   if (loading) return <div className="loading">Carregando...</div>;
@@ -67,6 +75,7 @@ export default function Offices() {
       {modal && (
         <Modal title={modal === 'create' ? 'Novo Escritorio' : 'Editar Escritorio'} onClose={() => setModal(null)}>
           <form onSubmit={handleSubmit}>
+            {error && <div className="alert alert-danger">{error}</div>}
             <div className="form-group">
               <label>Nome</label>
               <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
