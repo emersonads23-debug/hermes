@@ -15,13 +15,13 @@ const STATE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
 // --- OAuth Flow ---
 
-function generateAuthUrl(officeId) {
+function generateAuthUrl(companyId) {
   if (!env.contaAzul.clientId || !env.contaAzul.redirectUri) {
     throw new Error('Conta Azul client_id and redirect_uri must be configured');
   }
 
   const state = crypto.randomBytes(32).toString('hex');
-  pendingOAuthStates.set(state, { officeId, createdAt: Date.now() });
+  pendingOAuthStates.set(state, { companyId, createdAt: Date.now() });
 
   // Cleanup expired states
   for (const [key, val] of pendingOAuthStates) {
@@ -50,8 +50,8 @@ function validateOAuthState(state) {
   return entry;
 }
 
-async function exchangeCodeForToken(code, officeId) {
-  logger.info('Exchanging Conta Azul auth code for token', { officeId });
+async function exchangeCodeForToken(code, companyId) {
+  logger.info('Exchanging Conta Azul auth code for token', { companyId });
 
   const basicAuth = Buffer.from(
     `${env.contaAzul.clientId}:${env.contaAzul.clientSecret}`
@@ -73,35 +73,43 @@ async function exchangeCodeForToken(code, officeId) {
   const { access_token, refresh_token, expires_in } = response.data;
   const expiresAt = new Date(Date.now() + expires_in * 1000).toISOString();
 
+  // Get office_id from company
+  const { data: company } = await supabase
+    .from('companies')
+    .select('office_id')
+    .eq('id', companyId)
+    .single();
+
   const { error } = await supabase.from('integration_tokens').upsert(
     {
-      office_id: officeId,
+      company_id: companyId,
+      office_id: company?.office_id,
       provider: 'conta_azul',
       access_token: encrypt(access_token),
       refresh_token: encrypt(refresh_token),
       expires_at: expiresAt,
     },
-    { onConflict: 'office_id,provider' }
+    { onConflict: 'company_id,provider' }
   );
 
   if (error) throw new Error(`Failed to store Conta Azul token: ${error.message}`);
 
-  logger.info('Conta Azul token stored (encrypted)', { officeId, expiresAt });
+  logger.info('Conta Azul token stored (encrypted)', { companyId, expiresAt });
   return { access_token, expires_at: expiresAt };
 }
 
 // --- Token Management ---
 
-async function getAccessToken(officeId) {
+async function getAccessToken(companyId) {
   const { data: token, error } = await supabase
     .from('integration_tokens')
     .select('*')
-    .eq('office_id', officeId)
+    .eq('company_id', companyId)
     .eq('provider', 'conta_azul')
     .single();
 
   if (error || !token) {
-    throw new Error('Conta Azul nao configurada para este escritorio. Conecte pelo painel.');
+    throw new Error('Conta Azul nao configurada para esta empresa. Conecte pelo painel.');
   }
 
   // Decrypt stored tokens
@@ -111,14 +119,14 @@ async function getAccessToken(officeId) {
   // Refresh if expiring within 5 minutes
   const bufferMs = 5 * 60 * 1000;
   if (new Date(token.expires_at).getTime() - Date.now() <= bufferMs) {
-    logger.info('Conta Azul token expiring soon, refreshing', { officeId });
-    return refreshAccessToken(officeId, refreshToken);
+    logger.info('Conta Azul token expiring soon, refreshing', { companyId });
+    return refreshAccessToken(companyId, refreshToken);
   }
 
   return accessToken;
 }
 
-async function refreshAccessToken(officeId, currentRefreshToken) {
+async function refreshAccessToken(companyId, currentRefreshToken) {
   try {
     const basicAuth = Buffer.from(
       `${env.contaAzul.clientId}:${env.contaAzul.clientSecret}`
@@ -146,14 +154,14 @@ async function refreshAccessToken(officeId, currentRefreshToken) {
         refresh_token: encrypt(newRefresh || currentRefreshToken),
         expires_at: expiresAt,
       })
-      .eq('office_id', officeId)
+      .eq('company_id', companyId)
       .eq('provider', 'conta_azul');
 
-    logger.info('Conta Azul token refreshed (encrypted)', { officeId, expiresAt });
+    logger.info('Conta Azul token refreshed (encrypted)', { companyId, expiresAt });
     return access_token;
   } catch (err) {
     logger.error('Conta Azul token refresh failed', {
-      officeId,
+      companyId,
       status: err.response?.status,
       error: err.response?.data || err.message,
     });
@@ -163,7 +171,7 @@ async function refreshAccessToken(officeId, currentRefreshToken) {
       await supabase
         .from('integration_tokens')
         .update({ expires_at: new Date(0).toISOString() })
-        .eq('office_id', officeId)
+        .eq('company_id', companyId)
         .eq('provider', 'conta_azul');
     }
 
@@ -173,12 +181,12 @@ async function refreshAccessToken(officeId, currentRefreshToken) {
 
 // --- API Calls with retry ---
 
-async function apiCall(officeId, method, path, data = null, retries = 2) {
+async function apiCall(companyId, method, path, data = null, retries = 2) {
   let lastError;
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      const accessToken = await getAccessToken(officeId);
+      const accessToken = await getAccessToken(companyId);
       const response = await axios({
         method,
         url: `${BASE_URL}${path}`,
@@ -195,15 +203,15 @@ async function apiCall(officeId, method, path, data = null, retries = 2) {
 
       // 401 → force token refresh and retry
       if (err.response?.status === 401 && attempt < retries) {
-        logger.warn('Conta Azul 401, forcing token refresh', { officeId, path, attempt });
+        logger.warn('Conta Azul 401, forcing token refresh', { companyId, path, attempt });
         const { data: token } = await supabase
           .from('integration_tokens')
           .select('refresh_token')
-          .eq('office_id', officeId)
+          .eq('company_id', companyId)
           .eq('provider', 'conta_azul')
           .single();
         if (token) {
-          try { await refreshAccessToken(officeId, decrypt(token.refresh_token)); continue; } catch { /* fall through */ }
+          try { await refreshAccessToken(companyId, decrypt(token.refresh_token)); continue; } catch { /* fall through */ }
         }
       }
 
@@ -226,7 +234,7 @@ async function apiCall(officeId, method, path, data = null, retries = 2) {
   }
 
   logger.error('Conta Azul API call failed', {
-    officeId,
+    companyId,
     status: lastError.response?.status,
     error: lastError.response?.data || lastError.message,
   });
@@ -235,26 +243,26 @@ async function apiCall(officeId, method, path, data = null, retries = 2) {
 
 // --- Business Methods ---
 
-async function getInvoices(officeId, filters = {}) {
+async function getInvoices(companyId, filters = {}) {
   const params = new URLSearchParams(filters).toString();
-  return apiCall(officeId, 'GET', `/sales${params ? `?${params}` : ''}`);
+  return apiCall(companyId, 'GET', `/sales${params ? `?${params}` : ''}`);
 }
 
-async function getFinancialSummary(officeId) {
+async function getFinancialSummary(companyId) {
   const [receivables, payables] = await Promise.all([
-    apiCall(officeId, 'GET', '/financial/bills-to-receive'),
-    apiCall(officeId, 'GET', '/financial/bills-to-pay'),
+    apiCall(companyId, 'GET', '/financial/bills-to-receive'),
+    apiCall(companyId, 'GET', '/financial/bills-to-pay'),
   ]);
   return { receivables, payables };
 }
 
-async function getCustomers(officeId, search = '') {
-  return apiCall(officeId, 'GET', `/customers?search=${encodeURIComponent(search)}`);
+async function getCustomers(companyId, search = '') {
+  return apiCall(companyId, 'GET', `/customers?search=${encodeURIComponent(search)}`);
 }
 
-async function healthCheck(officeId) {
+async function healthCheck(companyId) {
   try {
-    const token = await getAccessToken(officeId);
+    const token = await getAccessToken(companyId);
     return { healthy: true, provider: 'conta_azul', hasToken: !!token };
   } catch (err) {
     return { healthy: false, provider: 'conta_azul', error: err.message };

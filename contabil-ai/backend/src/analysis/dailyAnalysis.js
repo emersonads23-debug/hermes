@@ -99,7 +99,7 @@ async function fetchERPData(company) {
   const { data: tokens } = await supabase
     .from('integration_tokens')
     .select('provider')
-    .eq('office_id', company.office_id);
+    .eq('company_id', company.id);
 
   if (!tokens?.length) return null;
 
@@ -110,8 +110,8 @@ async function fetchERPData(company) {
     if (providers.includes('omie')) {
       const omieService = require('../services/omieService');
       const [payable, receivable] = await Promise.allSettled([
-        omieService.getAccountsPayable(company.office_id),
-        omieService.getAccountsReceivable(company.office_id),
+        omieService.getAccountsPayable(company.id),
+        omieService.getAccountsReceivable(company.id),
       ]);
 
       const payableData = payable.status === 'fulfilled' ? payable.value : null;
@@ -130,7 +130,7 @@ async function fetchERPData(company) {
     if (providers.includes('conta_azul')) {
       const contaAzulService = require('../services/contaAzulService');
       try {
-        const summary = await contaAzulService.getFinancialSummary(company.office_id);
+        const summary = await contaAzulService.getFinancialSummary(company.id);
         financialData = {
           ...financialData,
           receivablesDetail: summary.receivables,

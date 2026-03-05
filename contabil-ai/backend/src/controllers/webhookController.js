@@ -170,15 +170,15 @@ async function handleFinancialQuery(text, context, intent, history) {
 
     if (provider === 'conta_azul') {
       if (intent === 'CONSULTA_FINANCEIRA') {
-        financialData = await contaAzulService.getFinancialSummary(context.officeId);
+        financialData = await contaAzulService.getFinancialSummary(context.companyId);
       } else {
-        financialData = await contaAzulService.getInvoices(context.officeId);
+        financialData = await contaAzulService.getInvoices(context.companyId);
       }
     } else if (provider === 'omie') {
       if (intent === 'CONSULTA_FINANCEIRA') {
-        financialData = await omieService.getFinancialSummary(context.officeId);
+        financialData = await omieService.getFinancialSummary(context.companyId);
       } else {
-        financialData = await omieService.listInvoices(context.officeId);
+        financialData = await omieService.listInvoices(context.companyId);
       }
     } else {
       return aiService.interpretMessage(

@@ -9,16 +9,16 @@ const MAX_RETRIES = 2;
 
 // --- Credential Management ---
 
-async function getCredentials(officeId) {
+async function getCredentials(companyId) {
   const { data: creds, error } = await supabase
     .from('integration_tokens')
     .select('*')
-    .eq('office_id', officeId)
+    .eq('company_id', companyId)
     .eq('provider', 'omie')
     .single();
 
   if (error || !creds) {
-    throw new Error('Omie nao configurado para este escritorio. Configure pelo painel.');
+    throw new Error('Omie nao configurado para esta empresa. Configure pelo painel.');
   }
 
   return { appKey: decrypt(creds.access_token), appSecret: decrypt(creds.refresh_token) };
@@ -46,8 +46,8 @@ async function testCredentials(appKey, appSecret) {
 
 // --- API Calls with retry & error mapping ---
 
-async function apiCall(officeId, endpoint, method, params = {}, retries = MAX_RETRIES) {
-  const { appKey, appSecret } = await getCredentials(officeId);
+async function apiCall(companyId, endpoint, method, params = {}, retries = MAX_RETRIES) {
+  const { appKey, appSecret } = await getCredentials(companyId);
   let lastError;
 
   for (let attempt = 0; attempt <= retries; attempt++) {
@@ -70,7 +70,7 @@ async function apiCall(officeId, endpoint, method, params = {}, retries = MAX_RE
 
         // Auth failures — no point retrying
         if (faultMsg.includes('app_key') || faultMsg.includes('app_secret') || faultCode === 'SOAP-ENV:Client-102') {
-          logger.error('Omie authentication failed', { officeId, faultCode, faultMsg });
+          logger.error('Omie authentication failed', { companyId, faultCode, faultMsg });
           throw new Error(`Omie autenticacao falhou: ${faultMsg}`);
         }
 
@@ -113,7 +113,7 @@ async function apiCall(officeId, endpoint, method, params = {}, retries = MAX_RE
   }
 
   logger.error('Omie API call failed after retries', {
-    officeId,
+    companyId,
     endpoint,
     method,
     error: lastError.message,
@@ -123,45 +123,45 @@ async function apiCall(officeId, endpoint, method, params = {}, retries = MAX_RE
 
 // --- Business Methods ---
 
-async function listInvoices(officeId, page = 1) {
-  return apiCall(officeId, '/produtos/nfconsultar/', 'ConsultarNF', {
+async function listInvoices(companyId, page = 1) {
+  return apiCall(companyId, '/produtos/nfconsultar/', 'ConsultarNF', {
     nPagina: page,
     nRegPorPagina: 20,
   });
 }
 
-async function getAccountsPayable(officeId, page = 1) {
-  return apiCall(officeId, '/financas/contapagar/', 'ListarContasPagar', {
+async function getAccountsPayable(companyId, page = 1) {
+  return apiCall(companyId, '/financas/contapagar/', 'ListarContasPagar', {
     nPagina: page,
     nRegPorPagina: 20,
   });
 }
 
-async function getAccountsReceivable(officeId, page = 1) {
-  return apiCall(officeId, '/financas/contareceber/', 'ListarContasReceber', {
+async function getAccountsReceivable(companyId, page = 1) {
+  return apiCall(companyId, '/financas/contareceber/', 'ListarContasReceber', {
     nPagina: page,
     nRegPorPagina: 20,
   });
 }
 
-async function getFinancialSummary(officeId) {
+async function getFinancialSummary(companyId) {
   const [payable, receivable] = await Promise.all([
-    getAccountsPayable(officeId),
-    getAccountsReceivable(officeId),
+    getAccountsPayable(companyId),
+    getAccountsReceivable(companyId),
   ]);
   return { payable, receivable };
 }
 
-async function getClients(officeId, page = 1) {
-  return apiCall(officeId, '/geral/clientes/', 'ListarClientes', {
+async function getClients(companyId, page = 1) {
+  return apiCall(companyId, '/geral/clientes/', 'ListarClientes', {
     pagina: page,
     registros_por_pagina: 20,
   });
 }
 
-async function healthCheck(officeId) {
+async function healthCheck(companyId) {
   try {
-    const { appKey, appSecret } = await getCredentials(officeId);
+    const { appKey, appSecret } = await getCredentials(companyId);
     await testCredentials(appKey, appSecret);
     return { healthy: true, provider: 'omie' };
   } catch (err) {
