@@ -82,13 +82,21 @@ if (process.env.JWT_SECRET === 'dev-secret' && env.nodeEnv === 'production') {
   process.exit(1);
 }
 
-// Production-only required vars
+// Production-only validation
 if (env.nodeEnv === 'production') {
-  const productionRequired = ['ENCRYPTION_KEY', 'EVOLUTION_API_KEY', 'SMTP_HOST', 'SMTP_USER', 'SMTP_PASS', 'REDIS_PASSWORD'];
+  // Critical — app cannot run securely without these
+  const productionRequired = ['ENCRYPTION_KEY'];
   const productionMissing = productionRequired.filter((key) => !process.env[key]);
   if (productionMissing.length > 0) {
     console.error(`FATAL: Missing production-required environment variables: ${productionMissing.join(', ')}`);
     process.exit(1);
+  }
+
+  // Recommended — features will be degraded without these
+  const productionRecommended = ['EVOLUTION_API_KEY', 'SMTP_HOST', 'SMTP_USER', 'SMTP_PASS', 'REDIS_PASSWORD'];
+  const productionWarn = productionRecommended.filter((key) => !process.env[key]);
+  if (productionWarn.length > 0) {
+    console.warn(`WARNING: Missing recommended environment variables: ${productionWarn.join(', ')}. Some features (email, WhatsApp, Redis auth) will not work.`);
   }
 }
 
