@@ -50,6 +50,7 @@ async function handleEvolutionWebhook(req, res) {
       case 'group_message':
       case 'own_message':
       case 'status_broadcast':
+      case 'lid_message':
         // Silently ignore
         break;
 

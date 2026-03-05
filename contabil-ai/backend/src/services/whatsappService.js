@@ -37,7 +37,7 @@ function parseWebhookEvent(body) {
   // Normalize different Evolution API payload shapes
   const data = body.data || body;
 
-  if (event === 'messages.upsert') {
+  if (event === 'messages.upsert' || event === 'MESSAGES_UPSERT') {
     const message = data.message || data;
     const key = data.key || message.key;
 
@@ -49,6 +49,32 @@ function parseWebhookEvent(body) {
     if (key.remoteJid === 'status@broadcast') return { type: 'status_broadcast' };
     if (key.remoteJid.endsWith('@g.us')) return { type: 'group_message' };
     if (key.fromMe) return { type: 'own_message' };
+
+    // Skip LID (Linked Device ID) messages — not a real phone number
+    if (key.remoteJid.endsWith('@lid')) {
+      logger.info('Skipping LID message, checking for phone in pushName/participant', {
+        remoteJid: key.remoteJid,
+        participant: data.participant,
+        pushName: data.pushName,
+      });
+      // Try to get the real phone from participant field
+      const participant = data.participant || key.participant;
+      if (participant && participant.includes('@s.whatsapp.net')) {
+        // Use participant as the real phone
+        const phone = participant.replace('@s.whatsapp.net', '');
+        const messageId = key.id;
+
+        let messageType = 'text';
+        if (message.audioMessage) messageType = 'audio';
+        else if (message.imageMessage) messageType = 'image';
+        else if (message.documentMessage) messageType = 'document';
+        else if (message.videoMessage) messageType = 'video';
+        else if (message.stickerMessage) messageType = 'sticker';
+
+        return { type: 'message', phone, messageId, messageType, message, instance };
+      }
+      return { type: 'lid_message', raw: body };
+    }
 
     const phone = key.remoteJid.replace('@s.whatsapp.net', '');
     const messageId = key.id;
@@ -72,7 +98,7 @@ function parseWebhookEvent(body) {
     };
   }
 
-  if (event === 'connection.update') {
+  if (event === 'connection.update' || event === 'CONNECTION_UPDATE') {
     return {
       type: 'connection_update',
       state: data.state,
@@ -81,21 +107,21 @@ function parseWebhookEvent(body) {
     };
   }
 
-  if (event === 'qrcode.updated') {
+  if (event === 'qrcode.updated' || event === 'QRCODE_UPDATED') {
     return { type: 'qrcode', base64: data.qrcode?.base64, instance };
   }
 
   return { type: event || 'unknown', raw: body };
 }
 
-// --- Send Messages ---
+// --- Send Messages (Evolution v1.8 format) ---
 
 async function sendText(to, text, instanceName) {
   const instance = instanceName || env.evolution.instanceName;
   try {
     const response = await api.post(`/message/sendText/${instance}`, {
       number: to,
-      text,
+      textMessage: { text },
     });
     logger.info('WhatsApp text sent', { to, instance, messageId: response.data?.key?.id });
     return response.data;
@@ -157,39 +183,86 @@ async function downloadMedia(messageId, instanceName) {
 
 // --- Instance Management ---
 
-async function getInstanceStatus() {
+async function getInstanceStatus(instanceName) {
+  const instance = instanceName || env.evolution.instanceName;
   try {
-    const response = await api.get(`/instance/connectionState/${env.evolution.instanceName}`);
+    const response = await api.get(`/instance/connectionState/${instance}`);
     return response.data;
   } catch (err) {
-    logger.error('Failed to get instance status', { error: err.message });
+    logger.error('Failed to get instance status', { instance, error: err.message });
     return { state: 'unknown', error: err.message };
   }
 }
 
-async function createInstance() {
+async function createInstance(instanceName) {
+  const name = instanceName || env.evolution.instanceName;
   try {
     const response = await api.post('/instance/create', {
-      instanceName: env.evolution.instanceName,
+      instanceName: name,
       qrcode: true,
       integration: 'WHATSAPP-BAILEYS',
-      webhook: `${env.apiUrl}/api/webhook/evolution`,
-      webhookByEvents: true,
+      webhook: 'http://backend:3000/api/webhook/evolution',
+      webhookByEvents: false,
       webhookBase64: true,
       events: [
-        'messages.upsert',
-        'connection.update',
-        'qrcode.updated',
+        'MESSAGES_UPSERT',
+        'CONNECTION_UPDATE',
+        'QRCODE_UPDATED',
       ],
     });
-    logger.info('Evolution instance created', { instance: env.evolution.instanceName });
+    logger.info('Evolution instance created', { instance: name });
     return response.data;
   } catch (err) {
-    // Instance may already exist
     if (err.response?.status === 403 || err.response?.status === 409) {
-      logger.info('Evolution instance already exists');
+      logger.info('Evolution instance already exists', { instance: name });
       return { existing: true };
     }
+    throw err;
+  }
+}
+
+async function setInstanceWebhook(instanceName) {
+  try {
+    const response = await api.post(`/webhook/set/${instanceName}`, {
+      url: 'http://backend:3000/api/webhook/evolution',
+      webhook_by_events: false,
+      webhook_base64: true,
+      events: ['MESSAGES_UPSERT', 'CONNECTION_UPDATE', 'QRCODE_UPDATED'],
+    });
+    logger.info('Webhook set for instance', { instance: instanceName });
+    return response.data;
+  } catch (err) {
+    logger.error('Failed to set webhook', { instance: instanceName, error: err.message });
+    throw err;
+  }
+}
+
+async function deleteInstance(instanceName) {
+  try {
+    await api.delete(`/instance/delete/${instanceName}`);
+    logger.info('Evolution instance deleted', { instance: instanceName });
+  } catch (err) {
+    logger.error('Failed to delete instance', { instance: instanceName, error: err.message });
+    throw err;
+  }
+}
+
+async function fetchInstances() {
+  try {
+    const response = await api.get('/instance/fetchInstances');
+    return response.data;
+  } catch (err) {
+    logger.error('Failed to fetch instances', { error: err.message });
+    return [];
+  }
+}
+
+async function getQrCode(instanceName) {
+  try {
+    const response = await api.get(`/instance/connect/${instanceName}`);
+    return response.data;
+  } catch (err) {
+    logger.error('Failed to get QR code', { instance: instanceName, error: err.message });
     throw err;
   }
 }
@@ -217,5 +290,9 @@ module.exports = {
   downloadMedia,
   getInstanceStatus,
   createInstance,
+  setInstanceWebhook,
+  deleteInstance,
+  fetchInstances,
+  getQrCode,
   healthCheck,
 };
