@@ -99,11 +99,24 @@ Inclua: resultado operacional, margem, indicadores chave, e 3 recomendacoes prio
 
 async function runAnalysis(companyId, prompt) {
   try {
+    // Enrich prompt with AI memory context
+    let memoryContext = '';
+    try {
+      const memoryEngine = require('../memory/memoryEngine');
+      memoryContext = await memoryEngine.getMemoryContext(companyId);
+    } catch (err) {
+      logger.warn('Failed to load memory context', { companyId, error: err.message });
+    }
+
+    const enrichedPrompt = memoryContext
+      ? `${prompt}\n\n${memoryContext}`
+      : prompt;
+
     const response = await openai.chat.completions.create({
       model: 'gpt-4o',
       messages: [
         { role: 'system', content: FINANCIAL_SYSTEM_PROMPT },
-        { role: 'user', content: prompt },
+        { role: 'user', content: enrichedPrompt },
       ],
       temperature: 0.2,
       max_tokens: 2048,

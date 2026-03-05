@@ -99,6 +99,8 @@ async function classifyFromText(text) {
 }
 
 async function processDocument(documentId) {
+  const memoryEngine = require('../memory/memoryEngine');
+
   const { data: doc, error } = await supabase
     .from('documents')
     .select('*')
@@ -117,7 +119,12 @@ async function processDocument(documentId) {
     .eq('id', documentId);
 
   try {
-    const result = await classifyDocument(doc.file_path, doc.mime_type);
+    let result = await classifyDocument(doc.file_path, doc.mime_type);
+
+    // Enhance classification with memory if company is known
+    if (doc.company_id) {
+      result = await memoryEngine.enhanceClassification(doc.company_id, result);
+    }
 
     const updateData = {
       classification: result.classification || 'unknown',

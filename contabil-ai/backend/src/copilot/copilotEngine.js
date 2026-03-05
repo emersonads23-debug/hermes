@@ -192,7 +192,9 @@ Insights recentes:
 ${recentInsights.slice(0, 5).map((i) => `- [${i.severity}] ${i.title}`).join('\n') || '- Nenhum insight recente'}
 
 Historico (ultimos ${recentSnapshots.length} snapshots):
-${recentSnapshots.slice(0, 7).map((s) => `${s.snapshot_date}: Rev=${Number(s.total_revenue).toFixed(0)} Desp=${Number(s.total_expenses).toFixed(0)} Caixa=${Number(s.cash_balance).toFixed(0)}`).join('\n')}`;
+${recentSnapshots.slice(0, 7).map((s) => `${s.snapshot_date}: Rev=${Number(s.total_revenue).toFixed(0)} Desp=${Number(s.total_expenses).toFixed(0)} Caixa=${Number(s.cash_balance).toFixed(0)}`).join('\n')}
+
+${context.memoryContext || ''}`;
 
   const response = await openai.chat.completions.create({
     model: 'gpt-4o',
@@ -291,6 +293,16 @@ async function evaluateCompany(companyId, triggerType = 'daily') {
       return { session, skipped: true };
     }
 
+    // Enrich context with AI memory
+    let memoryContext = '';
+    try {
+      const memoryEngine = require('../memory/memoryEngine');
+      memoryContext = await memoryEngine.getMemoryContext(companyId);
+    } catch (err) {
+      logger.warn('Failed to load memory context for copilot', { companyId, error: err.message });
+    }
+    context.memoryContext = memoryContext;
+
     // Run risk detectors
     const detectedRisks = runRiskDetectors(context.recentSnapshots);
     context.detectedRisks = detectedRisks;
@@ -369,6 +381,20 @@ async function evaluateCompany(companyId, triggerType = 'daily') {
       } catch (err) {
         logger.warn('Copilot task creation failed', { error: err.message });
       }
+    }
+
+    // Learn financial behaviors from detected risks
+    try {
+      const memoryService = require('../memory/memoryService');
+      for (const risk of detectedRisks) {
+        await memoryService.learnFinancialBehavior(companyId, {
+          behaviorKey: `risk_${risk.risk_type}`,
+          behaviorData: { severity: risk.severity, recommendation: risk.recommendation, detected_at: new Date().toISOString() },
+          source: 'copilot',
+        });
+      }
+    } catch (err) {
+      logger.warn('Failed to store copilot memories', { companyId, error: err.message });
     }
 
     // Complete session

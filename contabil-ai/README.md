@@ -76,6 +76,16 @@ Copilot autonomo que analisa riscos e gera recomendacoes:
 - Consultas financeiras via WhatsApp
 - Dashboard dedicado no frontend
 
+### AI Memory System (`backend/src/memory/`)
+Camada de memoria persistente que permite a IA aprender padroes por empresa:
+- Tipos de memoria: `supplier_category`, `expense_pattern`, `revenue_pattern`, `account_mapping`, `financial_behavior`
+- Memorias sao criadas quando classificacoes e reconciliacoes sao confirmadas, ou quando padroes de transacao se repetem
+- Antes de classificar um documento ou sugerir lancamento, o sistema busca memorias existentes
+- Se uma memoria com confianca > 80% existe, ela e usada para melhorar a classificacao
+- Confianca aumenta automaticamente a cada confirmacao (+10%, max 100%)
+- Memorias de alta confianca sao injetadas como contexto nos prompts do GPT-4o (Financial Agent, Copilot)
+- Queries indexadas por company_id, memory_type e memory_key para performance
+
 ### Queue System (`backend/src/queues/`)
 Filas de processamento com Redis + BullMQ:
 - `message_processing` - mensagens WhatsApp
@@ -174,6 +184,16 @@ POST /api/copilot/evaluate  { company_id }
 POST /api/copilot/ask       { company_id, question }
 ```
 
+### AI Memory
+```
+GET    /api/memory?company_id=&memory_type=&min_confidence=0.8&limit=50
+GET    /api/memory/search?company_id=&q=&memory_type=
+GET    /api/memory/stats?company_id=
+POST   /api/memory/confirm-classification  { company_id, supplier, classification, account_code, category }
+POST   /api/memory/confirm-reconciliation  { company_id, description, category, account_code, amount }
+DELETE /api/memory/:id
+```
+
 ### Sistema
 ```
 GET  /api/health             # Health check de todos os servicos
@@ -223,6 +243,7 @@ contabil-ai/
 │       ├── ocr/             # Document Intelligence
 │       ├── queues/          # Redis + BullMQ workers
 │       ├── copilot/         # Autonomous Financial Copilot
+│       ├── memory/          # AI Memory System
 │       ├── tasks/           # Human Task Engine (taskManager)
 │       ├── routes/          # Express routes
 │       ├── scripts/         # CLI tools (migrate, seed, cron)
