@@ -2,6 +2,7 @@ const nodemailer = require('nodemailer');
 const supabase = require('../config/supabase');
 const env = require('../config/env');
 const logger = require('../config/logger');
+const n8nService = require('./n8nService');
 
 const transporter = nodemailer.createTransport({
   host: env.smtp.host,
@@ -31,6 +32,22 @@ async function createEscalation({ officeId, companyId, userPhone, subject, descr
   }
 
   await sendEscalationEmail(task);
+
+  // Also trigger n8n escalation workflow
+  const { data: office } = await supabase
+    .from('offices')
+    .select('email')
+    .eq('id', task.office_id)
+    .single();
+
+  await n8nService.triggerEscalationNotification({
+    email: office?.email || env.escalationEmail,
+    subject: task.subject,
+    phone: task.user_phone,
+    description: task.description,
+    taskId: task.id,
+  });
+
   return task;
 }
 

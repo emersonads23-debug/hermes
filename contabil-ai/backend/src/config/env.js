@@ -26,6 +26,7 @@ const env = {
     apiUrl: process.env.EVOLUTION_API_URL,
     apiKey: process.env.EVOLUTION_API_KEY,
     instanceName: process.env.EVOLUTION_INSTANCE_NAME || 'contabil-ai',
+    webhookSecret: process.env.EVOLUTION_WEBHOOK_SECRET || '',
   },
 
   contaAzul: {

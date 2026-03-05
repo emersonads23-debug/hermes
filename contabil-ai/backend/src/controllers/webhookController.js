@@ -7,53 +7,128 @@ const documentService = require('../services/documentService');
 const escalationService = require('../services/escalationService');
 const contaAzulService = require('../services/contaAzulService');
 const omieService = require('../services/omieService');
+const n8nService = require('../services/n8nService');
 const supabase = require('../config/supabase');
 const env = require('../config/env');
 const logger = require('../config/logger');
 
 async function handleEvolutionWebhook(req, res) {
+  // Always respond 200 quickly to Evolution (avoid webhook retries)
+  res.status(200).json({ status: 'received' });
+
   try {
-    const { data } = req.body;
-    if (!data || !data.message) {
-      return res.status(200).json({ status: 'ignored' });
+    // Validate webhook signature if configured
+    if (env.evolution.webhookSecret) {
+      const signature = req.headers['x-webhook-signature'] || req.headers['x-evolution-signature'];
+      const rawBody = JSON.stringify(req.body);
+      if (!whatsappService.validateWebhookSignature(rawBody, signature)) {
+        logger.warn('Invalid webhook signature', { ip: req.ip });
+        return;
+      }
     }
 
-    const phone = data.key.remoteJid.replace('@s.whatsapp.net', '');
-    const messageId = data.key.id;
+    // Parse the event
+    const event = whatsappService.parseWebhookEvent(req.body);
 
-    // Find user/company by phone
-    const context = await resolveContext(phone);
-    if (!context) {
-      await whatsappService.sendText(phone,
-        'Ola! Seu numero nao esta cadastrado no ContabilAI. Entre em contato com seu escritorio de contabilidade.');
-      return res.status(200).json({ status: 'unregistered' });
+    switch (event.type) {
+      case 'message':
+        await processMessage(event);
+        break;
+
+      case 'connection_update':
+        logger.info('WhatsApp connection update', { state: event.state, reason: event.statusReason });
+        await n8nService.triggerWorkflow('connection-update', {
+          state: event.state,
+          instance: event.instance,
+          timestamp: new Date().toISOString(),
+        });
+        break;
+
+      case 'qrcode':
+        logger.info('QR code updated for instance', { instance: event.instance });
+        break;
+
+      case 'group_message':
+      case 'own_message':
+      case 'status_broadcast':
+        // Silently ignore
+        break;
+
+      default:
+        logger.debug('Unhandled webhook event', { type: event.type });
     }
-
-    // Log conversation
-    await logMessage(context, phone, 'incoming', data.message);
-
-    let responseText;
-
-    // Handle different message types
-    if (data.message.audioMessage) {
-      responseText = await handleAudio(data, context, phone, messageId);
-    } else if (data.message.imageMessage) {
-      responseText = await handleImage(data, context, phone, messageId);
-    } else if (data.message.documentMessage) {
-      responseText = await handleDocument(data, context, phone, messageId);
-    } else {
-      const text = data.message.conversation || data.message.extendedTextMessage?.text || '';
-      responseText = await handleText(text, context, phone);
-    }
-
-    await whatsappService.sendText(phone, responseText);
-    await logMessage(context, phone, 'outgoing', { text: responseText });
-
-    res.status(200).json({ status: 'processed' });
   } catch (err) {
     logger.error('Webhook processing error', { error: err.message, stack: err.stack });
-    res.status(200).json({ status: 'error' });
   }
+}
+
+async function processMessage(event) {
+  const { phone, messageId, messageType, message } = event;
+
+  // Resolve user context
+  const context = await resolveContext(phone);
+  if (!context) {
+    await whatsappService.sendText(
+      phone,
+      'Ola! Seu numero nao esta cadastrado no ContabilAI. Entre em contato com seu escritorio de contabilidade.'
+    );
+    return;
+  }
+
+  // Show "processing" reaction
+  await whatsappService.sendReaction(phone, messageId, '\u23F3');
+
+  // Log incoming message
+  await logMessage(context, phone, 'incoming', message, messageType);
+
+  let responseText;
+
+  try {
+    switch (messageType) {
+      case 'audio':
+        responseText = await handleAudio(message, context, phone, messageId);
+        break;
+      case 'image':
+        responseText = await handleImage(message, context, phone, messageId);
+        break;
+      case 'document':
+        responseText = await handleDocument(message, context, phone, messageId);
+        break;
+      default:
+        const text = message.conversation || message.extendedTextMessage?.text || '';
+        if (!text.trim()) {
+          responseText = 'Desculpe, nao consegui entender essa mensagem. Envie um texto, audio, imagem ou PDF.';
+        } else {
+          responseText = await handleText(text, context, phone);
+        }
+    }
+  } catch (err) {
+    logger.error('Message processing failed', { phone, messageType, error: err.message });
+    responseText = 'Desculpe, ocorreu um erro ao processar sua mensagem. Tente novamente em instantes.';
+
+    // Auto-escalate processing errors
+    await escalationService.createEscalation({
+      officeId: context.officeId,
+      companyId: context.companyId,
+      userPhone: phone,
+      subject: 'Erro no processamento de mensagem',
+      description: `Tipo: ${messageType}\nErro: ${err.message}`,
+    });
+  }
+
+  // Send response and clear reaction
+  await whatsappService.sendText(phone, responseText);
+  await whatsappService.sendReaction(phone, messageId, '');
+  await logMessage(context, phone, 'outgoing', { text: responseText }, 'text');
+
+  // Notify n8n of processed message
+  await n8nService.triggerWorkflow('message-processed', {
+    phone,
+    messageType,
+    officeId: context.officeId,
+    companyId: context.companyId,
+    timestamp: new Date().toISOString(),
+  });
 }
 
 async function handleText(text, context, phone) {
@@ -129,7 +204,7 @@ async function handleFinancialQuery(text, context, intent, history) {
   }
 }
 
-async function handleAudio(data, context, phone, messageId) {
+async function handleAudio(message, context, phone, messageId) {
   const media = await whatsappService.downloadMedia(messageId);
   const filePath = path.join(env.upload.dir, `${uuidv4()}.ogg`);
   fs.writeFileSync(filePath, Buffer.from(media.base64, 'base64'));
@@ -138,7 +213,7 @@ async function handleAudio(data, context, phone, messageId) {
   return handleText(result.transcription, context, phone);
 }
 
-async function handleImage(data, context, phone, messageId) {
+async function handleImage(message, context, phone, messageId) {
   const media = await whatsappService.downloadMedia(messageId);
   const filePath = path.join(env.upload.dir, `${uuidv4()}.jpg`);
   fs.writeFileSync(filePath, Buffer.from(media.base64, 'base64'));
@@ -156,9 +231,9 @@ async function handleImage(data, context, phone, messageId) {
   return `Analisei a imagem enviada:\n\n${result.analysis}`;
 }
 
-async function handleDocument(data, context, phone, messageId) {
+async function handleDocument(message, context, phone, messageId) {
   const media = await whatsappService.downloadMedia(messageId);
-  const ext = data.message.documentMessage.fileName?.split('.').pop() || 'pdf';
+  const ext = message.documentMessage?.fileName?.split('.').pop() || 'pdf';
   const filePath = path.join(env.upload.dir, `${uuidv4()}.${ext}`);
   fs.writeFileSync(filePath, Buffer.from(media.base64, 'base64'));
 
@@ -215,13 +290,14 @@ async function getConversationHistory(context, phone) {
   }));
 }
 
-async function logMessage(context, phone, direction, content) {
+async function logMessage(context, phone, direction, content, messageType = 'text') {
   await supabase.from('messages').insert({
     office_id: context.officeId,
     company_id: context.companyId,
     contact_phone: phone,
     direction,
     content: typeof content === 'string' ? content : JSON.stringify(content),
+    message_type: messageType,
   });
 }
 

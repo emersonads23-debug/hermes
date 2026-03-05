@@ -19,16 +19,9 @@ const escalationRoutes = require('./routes/escalations');
 
 const app = express();
 
-// Ensure upload dir exists
-const uploadDir = path.resolve(env.upload.dir);
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-// Ensure logs dir exists
-const logsDir = path.resolve('logs');
-if (!fs.existsSync(logsDir)) {
-  fs.mkdirSync(logsDir, { recursive: true });
+// Ensure required directories exist
+for (const dir of [path.resolve(env.upload.dir), path.resolve('logs')]) {
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
 
 // Security
@@ -44,7 +37,7 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
-// Webhook route before JSON parser (needs raw body for some webhooks)
+// Webhook route with larger body limit (media payloads)
 app.use('/api/webhook', express.json({ limit: '50mb' }), webhookRoutes);
 
 // Body parsing
@@ -59,9 +52,31 @@ app.use('/api/users', userRoutes);
 app.use('/api/integrations', integrationRoutes);
 app.use('/api/escalations', escalationRoutes);
 
-// Health check
-app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+// Health check endpoint — checks all integration statuses
+app.get('/api/health', async (_req, res) => {
+  const { healthCheck: supabaseHealth } = require('./config/supabase');
+  const whatsappService = require('./services/whatsappService');
+  const n8nService = require('./services/n8nService');
+
+  const [db, whatsapp, n8n] = await Promise.allSettled([
+    supabaseHealth(),
+    whatsappService.healthCheck(),
+    n8nService.healthCheck(),
+  ]);
+
+  const checks = {
+    database: db.status === 'fulfilled' ? db.value : { healthy: false, error: db.reason?.message },
+    whatsapp: whatsapp.status === 'fulfilled' ? whatsapp.value : { healthy: false, error: whatsapp.reason?.message },
+    n8n: n8n.status === 'fulfilled' ? n8n.value : { healthy: false, error: n8n.reason?.message },
+  };
+
+  const allHealthy = Object.values(checks).every((c) => c.healthy);
+
+  res.status(allHealthy ? 200 : 503).json({
+    status: allHealthy ? 'healthy' : 'degraded',
+    timestamp: new Date().toISOString(),
+    services: checks,
+  });
 });
 
 // Serve frontend in production
@@ -75,8 +90,56 @@ if (env.nodeEnv === 'production') {
 // Error handler
 app.use(errorHandler);
 
-app.listen(env.port, () => {
-  logger.info(`ContabilAI server running on port ${env.port}`);
+// --- Startup ---
+
+async function startServer() {
+  logger.info('Starting ContabilAI server...');
+
+  // Test Supabase connection
+  const { testConnection } = require('./config/supabase');
+  const dbResult = await testConnection();
+  if (!dbResult.healthy) {
+    logger.error('CRITICAL: Database connection failed. Server may not function correctly.');
+  }
+
+  // Auto-create Evolution instance if configured
+  if (env.evolution.apiUrl && env.evolution.apiKey) {
+    try {
+      const whatsappService = require('./services/whatsappService');
+      const instanceStatus = await whatsappService.getInstanceStatus();
+      logger.info('Evolution API status', { state: instanceStatus.state });
+
+      if (instanceStatus.state === 'unknown' || instanceStatus.error) {
+        logger.info('Attempting to create Evolution instance...');
+        await whatsappService.createInstance();
+      }
+    } catch (err) {
+      logger.warn('Evolution API not reachable at startup', { error: err.message });
+    }
+  }
+
+  // Check n8n connectivity
+  if (env.n8n.webhookUrl) {
+    const n8nService = require('./services/n8nService');
+    const n8nResult = await n8nService.healthCheck();
+    if (n8nResult.healthy) {
+      logger.info('n8n connected');
+    } else {
+      logger.warn('n8n not reachable at startup', { error: n8nResult.error });
+    }
+  }
+
+  // Start listening
+  app.listen(env.port, () => {
+    logger.info(`ContabilAI server running on port ${env.port} [${env.nodeEnv}]`);
+    logger.info(`API: ${env.apiUrl}`);
+    logger.info(`Frontend: ${env.frontendUrl}`);
+  });
+}
+
+startServer().catch((err) => {
+  logger.error('Failed to start server', { error: err.message, stack: err.stack });
+  process.exit(1);
 });
 
 module.exports = app;
