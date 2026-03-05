@@ -1,13 +1,14 @@
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
 const path = require('path');
 const fs = require('fs');
 
 const env = require('./config/env');
 const logger = require('./config/logger');
+const { requestTracing } = require('./config/logger');
 const errorHandler = require('./middleware/errorHandler');
+const { globalLimiter, authLimiter, webhookLimiter, integrationLimiter, tenantLimiter } = require('./middleware/rateLimiter');
 
 const authRoutes = require('./routes/auth');
 const officeRoutes = require('./routes/offices');
@@ -28,29 +29,26 @@ for (const dir of [path.resolve(env.upload.dir), path.resolve('logs')]) {
 app.use(helmet());
 app.use(cors({ origin: env.frontendUrl, credentials: true }));
 
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-app.use('/api/', limiter);
+// Request tracing (assigns requestId, logs request/response)
+app.use(requestTracing);
 
-// Webhook route with larger body limit (media payloads)
-app.use('/api/webhook', express.json({ limit: '50mb' }), webhookRoutes);
+// Global rate limiting
+app.use('/api/', globalLimiter);
+
+// Webhook route with larger body limit and higher rate limit
+app.use('/api/webhook', webhookLimiter, express.json({ limit: '50mb' }), webhookRoutes);
 
 // Body parsing
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// API routes
-app.use('/api/auth', authRoutes);
-app.use('/api/offices', officeRoutes);
-app.use('/api/companies', companyRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/integrations', integrationRoutes);
-app.use('/api/escalations', escalationRoutes);
+// API routes with per-route rate limiting
+app.use('/api/auth', authLimiter, authRoutes);
+app.use('/api/offices', tenantLimiter, officeRoutes);
+app.use('/api/companies', tenantLimiter, companyRoutes);
+app.use('/api/users', tenantLimiter, userRoutes);
+app.use('/api/integrations', integrationLimiter, integrationRoutes);
+app.use('/api/escalations', tenantLimiter, escalationRoutes);
 
 // Health check endpoint — checks all integration statuses
 app.get('/api/health', async (_req, res) => {

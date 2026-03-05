@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const supabase = require('../config/supabase');
 const env = require('../config/env');
 const logger = require('../config/logger');
+const { encrypt, decrypt } = require('../utils/crypto');
 
 const AUTH_URL = 'https://api.contaazul.com/auth/authorize';
 const TOKEN_URL = 'https://api.contaazul.com/oauth2/token';
@@ -76,8 +77,8 @@ async function exchangeCodeForToken(code, officeId) {
     {
       office_id: officeId,
       provider: 'conta_azul',
-      access_token,
-      refresh_token,
+      access_token: encrypt(access_token),
+      refresh_token: encrypt(refresh_token),
       expires_at: expiresAt,
     },
     { onConflict: 'office_id,provider' }
@@ -85,7 +86,7 @@ async function exchangeCodeForToken(code, officeId) {
 
   if (error) throw new Error(`Failed to store Conta Azul token: ${error.message}`);
 
-  logger.info('Conta Azul token stored', { officeId, expiresAt });
+  logger.info('Conta Azul token stored (encrypted)', { officeId, expiresAt });
   return { access_token, expires_at: expiresAt };
 }
 
@@ -103,14 +104,18 @@ async function getAccessToken(officeId) {
     throw new Error('Conta Azul nao configurada para este escritorio. Conecte pelo painel.');
   }
 
+  // Decrypt stored tokens
+  const accessToken = decrypt(token.access_token);
+  const refreshToken = decrypt(token.refresh_token);
+
   // Refresh if expiring within 5 minutes
   const bufferMs = 5 * 60 * 1000;
   if (new Date(token.expires_at).getTime() - Date.now() <= bufferMs) {
     logger.info('Conta Azul token expiring soon, refreshing', { officeId });
-    return refreshAccessToken(officeId, token.refresh_token);
+    return refreshAccessToken(officeId, refreshToken);
   }
 
-  return token.access_token;
+  return accessToken;
 }
 
 async function refreshAccessToken(officeId, currentRefreshToken) {
@@ -137,14 +142,14 @@ async function refreshAccessToken(officeId, currentRefreshToken) {
     await supabase
       .from('integration_tokens')
       .update({
-        access_token,
-        refresh_token: newRefresh || currentRefreshToken,
+        access_token: encrypt(access_token),
+        refresh_token: encrypt(newRefresh || currentRefreshToken),
         expires_at: expiresAt,
       })
       .eq('office_id', officeId)
       .eq('provider', 'conta_azul');
 
-    logger.info('Conta Azul token refreshed', { officeId, expiresAt });
+    logger.info('Conta Azul token refreshed (encrypted)', { officeId, expiresAt });
     return access_token;
   } catch (err) {
     logger.error('Conta Azul token refresh failed', {
@@ -198,7 +203,7 @@ async function apiCall(officeId, method, path, data = null, retries = 2) {
           .eq('provider', 'conta_azul')
           .single();
         if (token) {
-          try { await refreshAccessToken(officeId, token.refresh_token); continue; } catch { /* fall through */ }
+          try { await refreshAccessToken(officeId, decrypt(token.refresh_token)); continue; } catch { /* fall through */ }
         }
       }
 

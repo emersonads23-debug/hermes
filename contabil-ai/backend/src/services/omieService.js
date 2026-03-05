@@ -1,6 +1,7 @@
 const axios = require('axios');
 const supabase = require('../config/supabase');
 const logger = require('../config/logger');
+const { encrypt, decrypt } = require('../utils/crypto');
 
 const BASE_URL = 'https://app.omie.com.br/api/v1';
 const REQUEST_TIMEOUT = 30000;
@@ -20,7 +21,7 @@ async function getCredentials(officeId) {
     throw new Error('Omie nao configurado para este escritorio. Configure pelo painel.');
   }
 
-  return { appKey: creds.access_token, appSecret: creds.refresh_token };
+  return { appKey: decrypt(creds.access_token), appSecret: decrypt(creds.refresh_token) };
 }
 
 async function testCredentials(appKey, appSecret) {

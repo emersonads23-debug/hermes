@@ -17,7 +17,7 @@ const supabase = createClient(env.supabase.url, env.supabase.serviceRoleKey, {
   global: {
     headers: { 'x-application-name': 'contabil-ai' },
     fetch: (...args) => {
-      return retry(() => fetch(...args), { retries: 3, baseDelay: 500 });
+      return retryFetch(() => fetch(...args), { retries: 3, baseDelay: 500 });
     },
   },
 });
@@ -29,7 +29,7 @@ const supabasePublic = env.supabase.anonKey
     })
   : null;
 
-async function retry(fn, { retries = 3, baseDelay = 500 } = {}) {
+async function retryFetch(fn, { retries = 3, baseDelay = 500 } = {}) {
   let lastError;
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {

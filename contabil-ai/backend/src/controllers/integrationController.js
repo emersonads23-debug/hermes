@@ -3,6 +3,7 @@ const env = require('../config/env');
 const logger = require('../config/logger');
 const contaAzulService = require('../services/contaAzulService');
 const omieService = require('../services/omieService');
+const { encrypt } = require('../utils/crypto');
 
 // --- Conta Azul OAuth ---
 
@@ -70,8 +71,8 @@ async function saveOmieCredentials(req, res) {
     {
       office_id: req.user.office_id,
       provider: 'omie',
-      access_token: appKey,
-      refresh_token: appSecret,
+      access_token: encrypt(appKey),
+      refresh_token: encrypt(appSecret),
       expires_at: '2099-12-31T23:59:59Z',
     },
     { onConflict: 'office_id,provider' }

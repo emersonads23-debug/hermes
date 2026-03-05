@@ -60,4 +60,18 @@ const env = {
   },
 };
 
+// Startup validation for critical variables
+const required = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'JWT_SECRET'];
+const missing = required.filter((key) => !process.env[key]);
+if (missing.length > 0) {
+  console.error(`FATAL: Missing required environment variables: ${missing.join(', ')}`);
+  console.error('Copy .env.example to .env and fill in the required values.');
+  process.exit(1);
+}
+
+if (process.env.JWT_SECRET === 'dev-secret' && env.nodeEnv === 'production') {
+  console.error('FATAL: JWT_SECRET must be changed from default in production.');
+  process.exit(1);
+}
+
 module.exports = env;
