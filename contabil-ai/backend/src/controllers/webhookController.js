@@ -18,15 +18,19 @@ async function handleEvolutionWebhook(req, res) {
 
   try {
     // Debug: log raw webhook payload
+    const d = req.body.data || {};
     logger.info('Webhook raw payload', {
       event: req.body.event,
       instance: req.body.instance,
-      dataKeys: req.body.data ? Object.keys(req.body.data) : 'no data',
-      hasKey: !!req.body.data?.key,
-      remoteJid: req.body.data?.key?.remoteJid,
-      fromMe: req.body.data?.key?.fromMe,
-      hasMessage: !!req.body.data?.message,
-      messageKeys: req.body.data?.message ? Object.keys(req.body.data.message) : 'no message',
+      dataKeys: Object.keys(d),
+      remoteJid: d.key?.remoteJid,
+      fromMe: d.key?.fromMe,
+      participant: d.key?.participant || d.participant,
+      owner: d.owner,
+      source: typeof d.source === 'object' ? JSON.stringify(d.source).substring(0, 500) : d.source,
+      pushName: d.pushName,
+      messageType: d.messageType,
+      messageKeys: d.message ? Object.keys(d.message) : 'no message',
     });
 
     // Parse the event
