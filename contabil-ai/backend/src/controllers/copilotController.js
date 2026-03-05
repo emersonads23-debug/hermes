@@ -1,6 +1,18 @@
 const copilotEngine = require('../copilot/copilotEngine');
 const { addCopilotJob } = require('../queues');
+const supabase = require('../config/supabase');
 const logger = require('../config/logger');
+
+async function verifyCompanyBelongsToOffice(companyId, officeId) {
+  const { data, error } = await supabase
+    .from('companies')
+    .select('id')
+    .eq('id', companyId)
+    .eq('office_id', officeId)
+    .single();
+
+  return !error && !!data;
+}
 
 async function getSessions(req, res) {
   try {
@@ -45,6 +57,10 @@ async function triggerEvaluation(req, res) {
       return res.status(400).json({ error: 'company_id obrigatorio' });
     }
 
+    if (!(await verifyCompanyBelongsToOffice(company_id, req.user.office_id))) {
+      return res.status(403).json({ error: 'Empresa nao pertence ao seu escritorio' });
+    }
+
     const job = await addCopilotJob(company_id, 'manual');
     res.json({ jobId: job.id, message: 'Avaliacao do copilot enfileirada' });
   } catch (err) {
@@ -58,6 +74,10 @@ async function askCopilot(req, res) {
     const { company_id, question } = req.body;
     if (!company_id || !question) {
       return res.status(400).json({ error: 'company_id e question sao obrigatorios' });
+    }
+
+    if (!(await verifyCompanyBelongsToOffice(company_id, req.user.office_id))) {
+      return res.status(403).json({ error: 'Empresa nao pertence ao seu escritorio' });
     }
 
     const answer = await copilotEngine.answerFinancialQuery(company_id, question);

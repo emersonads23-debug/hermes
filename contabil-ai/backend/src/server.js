@@ -40,7 +40,13 @@ app.use(requestTracing);
 app.use('/api/', globalLimiter);
 
 // Webhook route with larger body limit and higher rate limit
-app.use('/api/webhook', webhookLimiter, express.json({ limit: '50mb' }), webhookRoutes);
+// Capture raw body buffer for HMAC signature verification
+app.use('/api/webhook', webhookLimiter, express.json({
+  limit: '50mb',
+  verify: (req, _res, buf) => {
+    req.rawBody = buf;
+  },
+}), webhookRoutes);
 
 // Body parsing
 app.use(express.json({ limit: '10mb' }));

@@ -25,8 +25,11 @@ function getAuth() {
   if (process.env.N8N_API_KEY) {
     return { headers: { 'X-N8N-API-KEY': process.env.N8N_API_KEY } };
   }
-  const user = process.env.N8N_USER || 'admin';
-  const pass = process.env.N8N_PASSWORD || 'admin';
+  const user = process.env.N8N_USER;
+  const pass = process.env.N8N_PASSWORD;
+  if (!user || !pass) {
+    throw new Error('N8N_USER and N8N_PASSWORD (or N8N_API_KEY) must be set in environment');
+  }
   return { auth: { username: user, password: pass } };
 }
 

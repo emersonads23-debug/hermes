@@ -20,7 +20,7 @@ async function handleEvolutionWebhook(req, res) {
     // Validate webhook signature if configured
     if (env.evolution.webhookSecret) {
       const signature = req.headers['x-webhook-signature'] || req.headers['x-evolution-signature'];
-      const rawBody = JSON.stringify(req.body);
+      const rawBody = req.rawBody || Buffer.from(JSON.stringify(req.body));
       if (!whatsappService.validateWebhookSignature(rawBody, signature)) {
         logger.warn('Invalid webhook signature', { ip: req.ip });
         return;
@@ -235,6 +235,7 @@ async function handleImage(message, context, phone, messageId) {
     company_id: context.companyId,
     file_path: filePath,
     type: 'image',
+    mime_type: filePath.endsWith('.png') ? 'image/png' : 'image/jpeg',
     analysis: result.analysis,
   });
 
@@ -249,11 +250,22 @@ async function handleDocument(message, context, phone, messageId) {
 
   const result = await documentService.processDocument(filePath);
 
+  const MIME_TYPES = {
+    pdf: 'application/pdf',
+    doc: 'application/msword',
+    docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    xls: 'application/vnd.ms-excel',
+    xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    csv: 'text/csv',
+    txt: 'text/plain',
+  };
+
   await supabase.from('documents').insert({
     office_id: context.officeId,
     company_id: context.companyId,
     file_path: filePath,
     type: ext,
+    mime_type: MIME_TYPES[ext] || 'application/octet-stream',
     analysis: result.analysis,
   });
 

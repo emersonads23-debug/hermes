@@ -3,6 +3,7 @@ const supabase = require('../config/supabase');
 const logger = require('../config/logger');
 const financialMemory = require('../analysis/financialMemory');
 const { addAlertJob } = require('../queues');
+const { sanitizePromptInput } = require('../utils/sanitize');
 
 // ============================================================
 // Risk Detectors
@@ -228,7 +229,8 @@ async function answerFinancialQuery(companyId, question) {
   }
 
   const s = context.latestSnapshot;
-  const prompt = `Pergunta: ${question}
+  const sanitizedQuestion = sanitizePromptInput(question);
+  const prompt = `Pergunta: ${sanitizedQuestion}
 
 Dados financeiros atuais:
 - Receita: R$ ${Number(s.total_revenue || 0).toFixed(2)}
