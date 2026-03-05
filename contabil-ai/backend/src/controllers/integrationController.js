@@ -1,55 +1,33 @@
 const supabase = require('../config/supabase');
-const env = require('../config/env');
 const logger = require('../config/logger');
 const contaAzulService = require('../services/contaAzulService');
 const omieService = require('../services/omieService');
 const { encrypt } = require('../utils/crypto');
 
-// --- Conta Azul OAuth ---
+// --- Conta Azul (manual token entry) ---
 
-async function contaAzulAuth(req, res) {
-  const { company_id } = req.query;
-  if (!company_id) {
-    return res.status(400).json({ error: 'company_id e obrigatorio' });
-  }
+async function saveContaAzulCredentials(req, res) {
+  const { company_id, client_id, client_secret, access_token, refresh_token, expires_in } = req.body;
 
-  try {
-    const { url } = contaAzulService.generateAuthUrl(company_id);
-    res.json({ url });
-  } catch (err) {
-    logger.error('Conta Azul auth URL generation failed', { error: err.message });
-    res.status(500).json({ error: err.message });
-  }
-}
-
-async function contaAzulCallback(req, res) {
-  const { code, state, error: oauthError } = req.query;
-
-  if (oauthError) {
-    logger.warn('Conta Azul OAuth denied', { error: oauthError });
-    return res.status(400).json({ error: `Autorizacao negada: ${oauthError}` });
-  }
-
-  if (!code || !state) {
-    return res.status(400).json({ error: 'Parametros code e state sao obrigatorios' });
-  }
-
-  // Validate state to prevent CSRF
-  const stateEntry = contaAzulService.validateOAuthState(state);
-  if (!stateEntry) {
-    logger.warn('Conta Azul OAuth invalid state', { state });
-    return res.status(400).json({ error: 'Estado OAuth invalido ou expirado. Tente novamente.' });
-  }
-
-  try {
-    const result = await contaAzulService.exchangeCodeForToken(code, stateEntry.companyId);
-    res.json({
-      message: 'Conta Azul conectada com sucesso',
-      expires_at: result.expires_at,
+  if (!company_id || !client_id || !client_secret || !access_token || !refresh_token) {
+    return res.status(400).json({
+      error: 'company_id, client_id, client_secret, access_token e refresh_token sao obrigatorios',
     });
+  }
+
+  try {
+    const result = await contaAzulService.saveTokens(company_id, {
+      clientId: client_id,
+      clientSecret: client_secret,
+      accessToken: access_token,
+      refreshToken: refresh_token,
+      expiresIn: expires_in || 3600,
+    });
+
+    res.json({ message: 'Conta Azul configurada com sucesso', expires_at: result.expires_at });
   } catch (err) {
-    logger.error('Conta Azul token exchange failed', { error: err.message });
-    res.status(500).json({ error: 'Falha ao conectar Conta Azul. Tente novamente.' });
+    logger.error('Failed to save Conta Azul credentials', { error: err.message });
+    res.status(500).json({ error: err.message });
   }
 }
 
@@ -62,7 +40,6 @@ async function saveOmieCredentials(req, res) {
     return res.status(400).json({ error: 'appKey, appSecret e company_id sao obrigatorios' });
   }
 
-  // Validate credentials by making a test API call
   try {
     await omieService.testCredentials(appKey, appSecret);
   } catch (err) {
@@ -72,7 +49,6 @@ async function saveOmieCredentials(req, res) {
     });
   }
 
-  // Get office_id from company
   const { data: company } = await supabase
     .from('companies')
     .select('office_id')
@@ -175,8 +151,7 @@ async function checkIntegrationHealth(req, res) {
 }
 
 module.exports = {
-  contaAzulAuth,
-  contaAzulCallback,
+  saveContaAzulCredentials,
   saveOmieCredentials,
   listIntegrations,
   removeIntegration,

@@ -1,106 +1,14 @@
 const axios = require('axios');
-const crypto = require('crypto');
 const supabase = require('../config/supabase');
-const env = require('../config/env');
 const logger = require('../config/logger');
 const { encrypt, decrypt } = require('../utils/crypto');
 
-const AUTH_URL = 'https://api.contaazul.com/auth/authorize';
 const TOKEN_URL = 'https://api.contaazul.com/oauth2/token';
 const BASE_URL = 'https://api.contaazul.com/v1';
 
-// In-memory OAuth state store (short-lived, keyed by state param)
-const pendingOAuthStates = new Map();
-const STATE_TTL_MS = 10 * 60 * 1000; // 10 minutes
-
-// --- OAuth Flow ---
-
-function generateAuthUrl(companyId) {
-  if (!env.contaAzul.clientId || !env.contaAzul.redirectUri) {
-    throw new Error('Conta Azul client_id and redirect_uri must be configured');
-  }
-
-  const state = crypto.randomBytes(32).toString('hex');
-  pendingOAuthStates.set(state, { companyId, createdAt: Date.now() });
-
-  // Cleanup expired states
-  for (const [key, val] of pendingOAuthStates) {
-    if (Date.now() - val.createdAt > STATE_TTL_MS) pendingOAuthStates.delete(key);
-  }
-
-  const params = new URLSearchParams({
-    redirect_uri: env.contaAzul.redirectUri,
-    client_id: env.contaAzul.clientId,
-    scope: 'sales purchases financial',
-    response_type: 'code',
-    state,
-  });
-
-  return { url: `${AUTH_URL}?${params}`, state };
-}
-
-function validateOAuthState(state) {
-  const entry = pendingOAuthStates.get(state);
-  if (!entry) return null;
-  if (Date.now() - entry.createdAt > STATE_TTL_MS) {
-    pendingOAuthStates.delete(state);
-    return null;
-  }
-  pendingOAuthStates.delete(state);
-  return entry;
-}
-
-async function exchangeCodeForToken(code, companyId) {
-  logger.info('Exchanging Conta Azul auth code for token', { companyId });
-
-  const basicAuth = Buffer.from(
-    `${env.contaAzul.clientId}:${env.contaAzul.clientSecret}`
-  ).toString('base64');
-
-  const response = await axios.post(TOKEN_URL, null, {
-    params: {
-      grant_type: 'authorization_code',
-      code,
-      redirect_uri: env.contaAzul.redirectUri,
-    },
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      Authorization: `Basic ${basicAuth}`,
-    },
-    timeout: 15000,
-  });
-
-  const { access_token, refresh_token, expires_in } = response.data;
-  const expiresAt = new Date(Date.now() + expires_in * 1000).toISOString();
-
-  // Get office_id from company
-  const { data: company } = await supabase
-    .from('companies')
-    .select('office_id')
-    .eq('id', companyId)
-    .single();
-
-  const { error } = await supabase.from('integration_tokens').upsert(
-    {
-      company_id: companyId,
-      office_id: company?.office_id,
-      provider: 'conta_azul',
-      access_token: encrypt(access_token),
-      refresh_token: encrypt(refresh_token),
-      expires_at: expiresAt,
-    },
-    { onConflict: 'company_id,provider' }
-  );
-
-  if (error) throw new Error(`Failed to store Conta Azul token: ${error.message}`);
-
-  logger.info('Conta Azul token stored (encrypted)', { companyId, expiresAt });
-  return { access_token, expires_at: expiresAt };
-}
-
 // --- Token Management ---
 
-async function getAccessToken(companyId) {
+async function getTokenRecord(companyId) {
   const { data: token, error } = await supabase
     .from('integration_tokens')
     .select('*')
@@ -109,10 +17,15 @@ async function getAccessToken(companyId) {
     .single();
 
   if (error || !token) {
-    throw new Error('Conta Azul nao configurada para esta empresa. Conecte pelo painel.');
+    throw new Error('Conta Azul nao configurada para esta empresa. Cadastre os tokens pelo painel.');
   }
 
-  // Decrypt stored tokens
+  return token;
+}
+
+async function getAccessToken(companyId) {
+  const token = await getTokenRecord(companyId);
+
   const accessToken = decrypt(token.access_token);
   const refreshToken = decrypt(token.refresh_token);
 
@@ -120,17 +33,22 @@ async function getAccessToken(companyId) {
   const bufferMs = 5 * 60 * 1000;
   if (new Date(token.expires_at).getTime() - Date.now() <= bufferMs) {
     logger.info('Conta Azul token expiring soon, refreshing', { companyId });
-    return refreshAccessToken(companyId, refreshToken);
+    return refreshAccessToken(companyId, refreshToken, token.metadata);
   }
 
   return accessToken;
 }
 
-async function refreshAccessToken(companyId, currentRefreshToken) {
+async function refreshAccessToken(companyId, currentRefreshToken, metadata) {
   try {
-    const basicAuth = Buffer.from(
-      `${env.contaAzul.clientId}:${env.contaAzul.clientSecret}`
-    ).toString('base64');
+    const clientId = metadata?.client_id;
+    const clientSecret = metadata?.client_secret;
+
+    if (!clientId || !clientSecret) {
+      throw new Error('client_id e client_secret nao configurados para esta empresa');
+    }
+
+    const basicAuth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
 
     const response = await axios.post(TOKEN_URL, null, {
       params: {
@@ -145,7 +63,7 @@ async function refreshAccessToken(companyId, currentRefreshToken) {
     });
 
     const { access_token, refresh_token: newRefresh, expires_in } = response.data;
-    const expiresAt = new Date(Date.now() + expires_in * 1000).toISOString();
+    const expiresAt = new Date(Date.now() + (expires_in || 3600) * 1000).toISOString();
 
     await supabase
       .from('integration_tokens')
@@ -166,7 +84,6 @@ async function refreshAccessToken(companyId, currentRefreshToken) {
       error: err.response?.data || err.message,
     });
 
-    // If refresh token is revoked, mark as expired so admin re-auths
     if (err.response?.status === 401 || err.response?.status === 400) {
       await supabase
         .from('integration_tokens')
@@ -175,8 +92,40 @@ async function refreshAccessToken(companyId, currentRefreshToken) {
         .eq('provider', 'conta_azul');
     }
 
-    throw new Error('Sessao do Conta Azul expirou. Reconecte pelo painel administrativo.');
+    throw new Error('Sessao do Conta Azul expirou. Atualize os tokens pelo painel administrativo.');
   }
+}
+
+// --- Save tokens manually ---
+
+async function saveTokens(companyId, { clientId, clientSecret, accessToken, refreshToken, expiresIn }) {
+  const { data: company } = await supabase
+    .from('companies')
+    .select('office_id')
+    .eq('id', companyId)
+    .single();
+
+  if (!company) throw new Error('Empresa nao encontrada');
+
+  const expiresAt = new Date(Date.now() + (expiresIn || 3600) * 1000).toISOString();
+
+  const { error } = await supabase.from('integration_tokens').upsert(
+    {
+      company_id: companyId,
+      office_id: company.office_id,
+      provider: 'conta_azul',
+      access_token: encrypt(accessToken),
+      refresh_token: encrypt(refreshToken),
+      expires_at: expiresAt,
+      metadata: { client_id: clientId, client_secret: clientSecret },
+    },
+    { onConflict: 'company_id,provider' }
+  );
+
+  if (error) throw new Error(`Falha ao salvar tokens do Conta Azul: ${error.message}`);
+
+  logger.info('Conta Azul tokens saved manually (encrypted)', { companyId, expiresAt });
+  return { expires_at: expiresAt };
 }
 
 // --- API Calls with retry ---
@@ -201,21 +150,17 @@ async function apiCall(companyId, method, path, data = null, retries = 2) {
     } catch (err) {
       lastError = err;
 
-      // 401 → force token refresh and retry
       if (err.response?.status === 401 && attempt < retries) {
         logger.warn('Conta Azul 401, forcing token refresh', { companyId, path, attempt });
-        const { data: token } = await supabase
-          .from('integration_tokens')
-          .select('refresh_token')
-          .eq('company_id', companyId)
-          .eq('provider', 'conta_azul')
-          .single();
+        const token = await getTokenRecord(companyId).catch(() => null);
         if (token) {
-          try { await refreshAccessToken(companyId, decrypt(token.refresh_token)); continue; } catch { /* fall through */ }
+          try {
+            await refreshAccessToken(companyId, decrypt(token.refresh_token), token.metadata);
+            continue;
+          } catch { /* fall through */ }
         }
       }
 
-      // 429 → respect Retry-After header
       if (err.response?.status === 429 && attempt < retries) {
         const retryAfter = parseInt(err.response.headers['retry-after'], 10) || 5;
         logger.warn('Conta Azul rate limited', { retryAfter, attempt });
@@ -223,7 +168,6 @@ async function apiCall(companyId, method, path, data = null, retries = 2) {
         continue;
       }
 
-      // 5xx → exponential backoff
       if (err.response?.status >= 500 && attempt < retries) {
         const delay = 1000 * Math.pow(2, attempt);
         logger.warn('Conta Azul server error, retrying', { status: err.response.status, delay });
@@ -270,9 +214,7 @@ async function healthCheck(companyId) {
 }
 
 module.exports = {
-  generateAuthUrl,
-  validateOAuthState,
-  exchangeCodeForToken,
+  saveTokens,
   getAccessToken,
   getInvoices,
   getFinancialSummary,
