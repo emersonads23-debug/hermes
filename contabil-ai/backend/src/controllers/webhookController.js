@@ -17,7 +17,7 @@ async function handleEvolutionWebhook(req, res) {
   res.status(200).json({ status: 'received' });
 
   try {
-    // Validate webhook signature if configured
+    // Validate webhook signature
     if (env.evolution.webhookSecret) {
       const signature = req.headers['x-webhook-signature'] || req.headers['x-evolution-signature'];
       const rawBody = JSON.stringify(req.body);
@@ -25,6 +25,9 @@ async function handleEvolutionWebhook(req, res) {
         logger.warn('Invalid webhook signature', { ip: req.ip });
         return;
       }
+    } else if (env.nodeEnv === 'production') {
+      logger.error('EVOLUTION_WEBHOOK_SECRET not configured in production - rejecting webhook');
+      return;
     }
 
     // Parse the event

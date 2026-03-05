@@ -12,6 +12,11 @@ async function list(req, res) {
 }
 
 async function getById(req, res) {
+  // Non-superadmin can only view their own office
+  if (req.user.role !== 'superadmin' && req.params.id !== req.user.office_id) {
+    return res.status(403).json({ error: 'Acesso negado' });
+  }
+
   const { data, error } = await supabase
     .from('offices')
     .select('*, companies(*), users(id, name, email, role, active)')
@@ -20,6 +25,36 @@ async function getById(req, res) {
 
   if (error) return res.status(404).json({ error: 'Escritorio nao encontrado' });
   res.json({ office: data });
+}
+
+async function update(req, res) {
+  if (req.user.role !== 'superadmin' && req.params.id !== req.user.office_id) {
+    return res.status(403).json({ error: 'Acesso negado' });
+  }
+
+  const { data, error } = await supabase
+    .from('offices')
+    .update(req.validated)
+    .eq('id', req.params.id)
+    .select()
+    .single();
+
+  if (error) return res.status(400).json({ error: error.message });
+  res.json({ office: data });
+}
+
+async function remove(req, res) {
+  if (req.user.role !== 'superadmin') {
+    return res.status(403).json({ error: 'Acesso negado' });
+  }
+
+  const { error } = await supabase
+    .from('offices')
+    .update({ active: false })
+    .eq('id', req.params.id);
+
+  if (error) return res.status(400).json({ error: error.message });
+  res.json({ message: 'Escritorio desativado' });
 }
 
 async function create(req, res) {
@@ -45,28 +80,6 @@ async function create(req, res) {
   if (userErr) return res.status(400).json({ error: userErr.message });
 
   res.status(201).json({ office });
-}
-
-async function update(req, res) {
-  const { data, error } = await supabase
-    .from('offices')
-    .update(req.validated)
-    .eq('id', req.params.id)
-    .select()
-    .single();
-
-  if (error) return res.status(400).json({ error: error.message });
-  res.json({ office: data });
-}
-
-async function remove(req, res) {
-  const { error } = await supabase
-    .from('offices')
-    .update({ active: false })
-    .eq('id', req.params.id);
-
-  if (error) return res.status(400).json({ error: error.message });
-  res.json({ message: 'Escritorio desativado' });
 }
 
 module.exports = { list, getById, create, update, remove };

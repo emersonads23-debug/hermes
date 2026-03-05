@@ -6,7 +6,14 @@ const IV_LENGTH = 16;
 const TAG_LENGTH = 16;
 
 function getEncryptionKey() {
-  const secret = process.env.ENCRYPTION_KEY || env.jwt.secret;
+  const secret = process.env.ENCRYPTION_KEY;
+  if (!secret) {
+    if (env.nodeEnv === 'production') {
+      throw new Error('ENCRYPTION_KEY must be set in production');
+    }
+    // Fallback for development only
+    return crypto.createHash('sha256').update(env.jwt.secret).digest();
+  }
   return crypto.createHash('sha256').update(secret).digest();
 }
 
