@@ -31,5 +31,6 @@ router.get('/:id', authorize('superadmin', 'office_admin'), asyncHandler(officeC
 router.post('/', authorize('superadmin'), validate(createSchema), asyncHandler(officeController.create));
 router.put('/:id', authorize('superadmin', 'office_admin'), validate(updateSchema), asyncHandler(officeController.update));
 router.delete('/:id', authorize('superadmin'), asyncHandler(officeController.remove));
+router.post('/:id/reactivate', authorize('superadmin'), asyncHandler(officeController.reactivate));
 
 module.exports = router;

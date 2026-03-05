@@ -82,4 +82,20 @@ async function create(req, res) {
   res.status(201).json({ office });
 }
 
-module.exports = { list, getById, create, update, remove };
+async function reactivate(req, res) {
+  if (req.user.role !== 'superadmin') {
+    return res.status(403).json({ error: 'Acesso negado' });
+  }
+
+  const { data, error } = await supabase
+    .from('offices')
+    .update({ active: true })
+    .eq('id', req.params.id)
+    .select()
+    .single();
+
+  if (error) return res.status(400).json({ error: error.message });
+  res.json({ office: data, message: 'Escritorio reativado' });
+}
+
+module.exports = { list, getById, create, update, remove, reactivate };
