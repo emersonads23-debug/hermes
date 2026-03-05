@@ -19,6 +19,7 @@ const integrationRoutes = require('./routes/integrations');
 const escalationRoutes = require('./routes/escalations');
 const taskRoutes = require('./routes/tasks');
 const financialRoutes = require('./routes/financial');
+const copilotRoutes = require('./routes/copilot');
 
 const app = express();
 
@@ -53,6 +54,7 @@ app.use('/api/integrations', integrationLimiter, integrationRoutes);
 app.use('/api/escalations', tenantLimiter, escalationRoutes);
 app.use('/api/tasks', tenantLimiter, taskRoutes);
 app.use('/api/financial', tenantLimiter, financialRoutes);
+app.use('/api/copilot', tenantLimiter, copilotRoutes);
 
 // Health check endpoint — checks all integration statuses
 app.get('/api/health', async (_req, res) => {

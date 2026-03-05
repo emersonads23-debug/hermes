@@ -10,6 +10,7 @@ import Escalations from './pages/Escalations';
 import Integrations from './pages/Integrations';
 import FinancialDashboard from './pages/FinancialDashboard';
 import Tasks from './pages/Tasks';
+import Copilot from './pages/Copilot';
 
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
@@ -29,6 +30,7 @@ export default function App() {
         <Route path="escalations" element={<Escalations />} />
         <Route path="financial" element={<FinancialDashboard />} />
         <Route path="tasks" element={<Tasks />} />
+        <Route path="copilot" element={<Copilot />} />
         <Route path="integrations" element={<Integrations />} />
       </Route>
     </Routes>

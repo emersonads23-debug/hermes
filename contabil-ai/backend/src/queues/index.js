@@ -13,6 +13,7 @@ const QUEUES = {
   MESSAGE_PROCESSING: 'message_processing',
   DOCUMENT_PROCESSING: 'document_processing',
   FINANCIAL_ANALYSIS: 'financial_analysis',
+  COPILOT_ANALYSIS: 'copilot_analysis',
   ALERTS: 'alerts',
 };
 
@@ -91,6 +92,14 @@ async function addFinancialAnalysisJob(companyId, analysisType, data = {}) {
   });
 }
 
+async function addCopilotJob(companyId, triggerType = 'daily', data = {}) {
+  return getQueue(QUEUES.COPILOT_ANALYSIS).add('copilot-evaluate', {
+    companyId,
+    triggerType,
+    ...data,
+  });
+}
+
 async function addAlertJob(alertData) {
   return getQueue(QUEUES.ALERTS).add('send-alert', alertData, {
     priority: alertData.severity === 'critical' ? 1 : 3,
@@ -130,6 +139,7 @@ module.exports = {
   addMessageJob,
   addDocumentJob,
   addFinancialAnalysisJob,
+  addCopilotJob,
   addAlertJob,
   getQueueStats,
   closeAll,

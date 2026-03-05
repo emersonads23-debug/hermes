@@ -3,7 +3,7 @@ const logger = require('../config/logger');
 const financialMemory = require('./financialMemory');
 const financialAgent = require('../agents/financialAgent');
 const alertEngine = require('../alerts/alertEngine');
-const { addAlertJob } = require('../queues');
+const { addAlertJob, addCopilotJob } = require('../queues');
 
 const BATCH_SIZE = 10;
 
@@ -81,6 +81,11 @@ async function analyzeCompany(company) {
   for (const alert of alerts) {
     await addAlertJob(alert);
   }
+
+  // Step 6: Queue copilot evaluation
+  await addCopilotJob(company.id, 'daily').catch((err) => {
+    logger.warn('Copilot job queue failed', { companyId: company.id, error: err.message });
+  });
 
   return { snapshot, analysis, alertCount: alerts.length };
 }

@@ -141,7 +141,7 @@ async function handleText(text, context, phone) {
     case 'CONSULTA_NF':
     case 'CONSULTA_BOLETO':
     case 'CONSULTA_FINANCEIRA':
-      return handleFinancialQuery(text, context, intent, history);
+      return handleCopilotQuery(text, context);
 
     case 'ESCALAR':
       await escalationService.createEscalation({
@@ -167,6 +167,16 @@ async function handleText(text, context, phone) {
       }
       return response;
     }
+  }
+}
+
+async function handleCopilotQuery(text, context) {
+  try {
+    const copilotEngine = require('../copilot/copilotEngine');
+    return await copilotEngine.answerFinancialQuery(context.companyId, text);
+  } catch (err) {
+    logger.error('Copilot WhatsApp query failed', { error: err.message });
+    return handleFinancialQuery(text, context, 'CONSULTA_FINANCEIRA', []);
   }
 }
 

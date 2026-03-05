@@ -64,11 +64,24 @@ Sistema de regras para alertas:
 - Queda de receita
 - Entrega via WhatsApp, email e dashboard
 
+### Autonomous Financial Copilot (`backend/src/copilot/`)
+Copilot autonomo que analisa riscos e gera recomendacoes:
+- Deteccao de fluxo de caixa negativo
+- Deteccao de picos de despesas (>30% acima da media)
+- Deteccao de queda de receita
+- Envelhecimento alto de contas a receber
+- Faturas grandes nao pagas
+- Raciocinio via GPT-4o com recomendacoes acionaveis
+- Execucao automatica apos analise diaria
+- Consultas financeiras via WhatsApp
+- Dashboard dedicado no frontend
+
 ### Queue System (`backend/src/queues/`)
 Filas de processamento com Redis + BullMQ:
 - `message_processing` - mensagens WhatsApp
 - `document_processing` - classificacao de documentos
 - `financial_analysis` - analises financeiras
+- `copilot_analysis` - avaliacao autonoma do copilot
 - `alerts` - entrega de alertas
 
 ### Human Task System
@@ -152,6 +165,15 @@ PUT  /api/tasks/:id
 POST /api/tasks/:id/assign  { user_id }
 ```
 
+### Copilot
+```
+GET  /api/copilot/sessions?company_id=&limit=10
+GET  /api/copilot/sessions/:id/actions
+GET  /api/copilot/actions?limit=20&severity=
+POST /api/copilot/evaluate  { company_id }
+POST /api/copilot/ask       { company_id, question }
+```
+
 ### Sistema
 ```
 GET  /api/health             # Health check de todos os servicos
@@ -200,6 +222,7 @@ contabil-ai/
 │       ├── middleware/       # Auth, Rate Limiting, Validation
 │       ├── ocr/             # Document Intelligence
 │       ├── queues/          # Redis + BullMQ workers
+│       ├── copilot/         # Autonomous Financial Copilot
 │       ├── tasks/           # Human Task Engine (taskManager)
 │       ├── routes/          # Express routes
 │       ├── scripts/         # CLI tools (migrate, seed, cron)

@@ -35,6 +35,9 @@ export default function Layout() {
           <NavLink to="/tasks">
             <span>Tarefas</span>
           </NavLink>
+          <NavLink to="/copilot">
+            <span>Copilot</span>
+          </NavLink>
           <NavLink to="/escalations">
             <span>Escalacoes</span>
           </NavLink>

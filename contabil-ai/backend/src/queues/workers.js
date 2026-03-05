@@ -77,6 +77,15 @@ function startWorkers() {
     }
   }, 2);
 
+  // Copilot analysis worker
+  registerWorker(QUEUES.COPILOT_ANALYSIS, async (job) => {
+    const { companyId, triggerType } = job.data;
+    logger.info('Running copilot evaluation', { jobId: job.id, companyId, triggerType });
+
+    const copilotEngine = require('../copilot/copilotEngine');
+    return copilotEngine.evaluateCompany(companyId, triggerType);
+  }, 2);
+
   // Alert delivery worker
   registerWorker(QUEUES.ALERTS, async (job) => {
     const alertEngine = require('../alerts/alertEngine');
