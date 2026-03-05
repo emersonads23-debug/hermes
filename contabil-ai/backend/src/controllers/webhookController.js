@@ -246,27 +246,55 @@ async function handleDocument(message, context, phone, messageId) {
 }
 
 async function resolveContext(phone, webhookInstance) {
+  // 1. Find user by WhatsApp phone number
   const { data: user } = await supabase
-    .from('whatsapp_contacts')
-    .select('*, company:companies(*, office:offices(*))')
+    .from('users')
+    .select('id, name, phone, active, office_id')
     .eq('phone', phone)
     .eq('active', true)
     .single();
 
-  if (!user || !user.company) return null;
+  if (!user) return null;
 
-  const office = user.company.office;
+  // 2. Find companies linked to this user via user_companies
+  const { data: userCompanies } = await supabase
+    .from('user_companies')
+    .select('company:companies(*, office:offices(*))')
+    .eq('user_id', user.id);
 
-  const { data: integration } = await supabase
+  if (!userCompanies || userCompanies.length === 0) return null;
+
+  // Use first company (user may have multiple)
+  const company = userCompanies[0].company;
+  if (!company) return null;
+
+  const office = company.office;
+
+  // 3. Check for ERP integration (try company-level first, then office-level)
+  let integration = null;
+  const { data: companyIntegration } = await supabase
     .from('integration_tokens')
     .select('provider')
-    .eq('office_id', user.company.office_id)
+    .eq('company_id', company.id)
     .single();
 
+  if (companyIntegration) {
+    integration = companyIntegration;
+  } else {
+    const { data: officeIntegration } = await supabase
+      .from('integration_tokens')
+      .select('provider')
+      .eq('office_id', company.office_id)
+      .is('company_id', null)
+      .single();
+    integration = officeIntegration;
+  }
+
   return {
-    officeId: user.company.office_id,
-    companyId: user.company_id,
-    contactId: user.id,
+    officeId: company.office_id,
+    companyId: company.id,
+    userId: user.id,
+    userName: user.name,
     officeName: office?.name || 'Escritorio',
     botName: office?.bot_name || 'ContabilAI',
     instanceName: office?.evolution_instance_name || webhookInstance || null,

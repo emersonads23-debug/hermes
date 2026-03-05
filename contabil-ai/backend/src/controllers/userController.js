@@ -1,10 +1,12 @@
 const bcrypt = require('bcryptjs');
 const supabase = require('../config/supabase');
 
+const USER_SELECT = 'id, name, email, phone, role, active, office_id, created_at, office:offices(name), user_companies(company:companies(id, name))';
+
 async function list(req, res) {
   let query = supabase
     .from('users')
-    .select('id, name, email, role, active, office_id, created_at, office:offices(name)')
+    .select(USER_SELECT)
     .order('name');
 
   if (req.user.role !== 'superadmin') {
@@ -19,7 +21,7 @@ async function list(req, res) {
 async function getById(req, res) {
   let query = supabase
     .from('users')
-    .select('id, name, email, role, active, office_id, created_at, office:offices(name)')
+    .select(USER_SELECT)
     .eq('id', req.params.id);
 
   if (req.user.role !== 'superadmin') {
@@ -33,20 +35,26 @@ async function getById(req, res) {
 }
 
 async function create(req, res) {
-  const { name, email, password, role } = req.validated;
+  const { name, email, password, role, phone } = req.validated;
   const officeId = req.user.role === 'superadmin'
     ? req.validated.office_id
     : req.user.office_id;
 
   const hash = await bcrypt.hash(password, 12);
+  const phoneClean = phone ? phone.replace(/\D/g, '') : null;
 
   const { data, error } = await supabase
     .from('users')
-    .insert({ name, email, password_hash: hash, role, office_id: officeId })
-    .select('id, name, email, role, active, office_id, created_at')
+    .insert({ name, email, password_hash: hash, role, office_id: officeId, phone: phoneClean })
+    .select('id, name, email, phone, role, active, office_id, created_at')
     .single();
 
-  if (error) return res.status(400).json({ error: error.message });
+  if (error) {
+    if (error.code === '23505' && error.message.includes('phone')) {
+      return res.status(400).json({ error: 'Este numero de WhatsApp ja esta cadastrado para outro usuario' });
+    }
+    return res.status(400).json({ error: error.message });
+  }
   res.status(201).json({ user: data });
 }
 
@@ -55,6 +63,9 @@ async function update(req, res) {
   if (updates.password) {
     updates.password_hash = await bcrypt.hash(updates.password, 12);
     delete updates.password;
+  }
+  if (updates.phone) {
+    updates.phone = updates.phone.replace(/\D/g, '');
   }
 
   let query = supabase
@@ -67,10 +78,15 @@ async function update(req, res) {
   }
 
   const { data, error } = await query
-    .select('id, name, email, role, active, office_id, created_at')
+    .select('id, name, email, phone, role, active, office_id, created_at')
     .single();
 
-  if (error) return res.status(400).json({ error: error.message });
+  if (error) {
+    if (error.code === '23505' && error.message.includes('phone')) {
+      return res.status(400).json({ error: 'Este numero de WhatsApp ja esta cadastrado para outro usuario' });
+    }
+    return res.status(400).json({ error: error.message });
+  }
   res.json({ user: data });
 }
 

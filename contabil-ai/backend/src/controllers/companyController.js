@@ -18,7 +18,7 @@ async function list(req, res) {
 async function getById(req, res) {
   let query = supabase
     .from('companies')
-    .select('*, office:offices(name), whatsapp_contacts(*)')
+    .select('*, office:offices(name)')
     .eq('id', req.params.id);
 
   // Tenant isolation: non-superadmin can only see own office's companies

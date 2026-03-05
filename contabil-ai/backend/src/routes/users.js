@@ -11,6 +11,7 @@ const createSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
   role: z.enum(['office_admin', 'accountant', 'viewer']),
+  phone: z.string().min(10).max(20).optional(),
   office_id: z.string().uuid().optional(),
 });
 
@@ -19,6 +20,7 @@ const updateSchema = z.object({
   email: z.string().email().optional(),
   password: z.string().min(8).optional(),
   role: z.enum(['office_admin', 'accountant', 'viewer']).optional(),
+  phone: z.string().min(10).max(20).nullable().optional(),
   active: z.boolean().optional(),
 });
 
