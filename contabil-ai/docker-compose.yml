@@ -115,22 +115,26 @@ services:
     ports:
       - "8080:8080"
     environment:
+      - SERVER_URL=http://evolution:8080
       - AUTHENTICATION_API_KEY=${EVOLUTION_API_KEY:?EVOLUTION_API_KEY must be set}
       - AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES=true
-      - DATABASE_ENABLED=true
-      - DATABASE_PROVIDER=sqlite
-      - DATABASE_SAVE_DATA_INSTANCE=true
-      - DATABASE_SAVE_DATA_NEW_MESSAGE=true
-      - DATABASE_SAVE_DATA_CONTACTS=true
+      - DEL_INSTANCE=false
+      - STORE_MESSAGES=true
+      - STORE_MESSAGE_UP=true
+      - STORE_CONTACTS=true
+      - STORE_CHATS=true
       - WEBHOOK_GLOBAL_URL=http://backend:3000/api/webhook/evolution
       - WEBHOOK_GLOBAL_ENABLED=true
+      - WEBHOOK_GLOBAL_WEBHOOK_BY_EVENTS=false
       - WEBHOOK_EVENTS_MESSAGES_UPSERT=true
       - WEBHOOK_EVENTS_CONNECTION_UPDATE=true
       - WEBHOOK_EVENTS_QRCODE_UPDATED=true
       - CONFIG_SESSION_PHONE_CLIENT=ContabilAI
       - CONFIG_SESSION_PHONE_NAME=Chrome
+      - LOG_LEVEL=WARN
     volumes:
-      - evolution_data:/evolution/instances
+      - evolution_store:/evolution/store
+      - evolution_instances:/evolution/instances
     networks:
       - contabilai
 
@@ -139,7 +143,8 @@ volumes:
   logs:
   redis_data:
   n8n_data:
-  evolution_data:
+  evolution_store:
+  evolution_instances:
 
 networks:
   contabilai:
