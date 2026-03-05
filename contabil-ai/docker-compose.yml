@@ -11,6 +11,7 @@ services:
     volumes:
       - uploads:/app/uploads
       - logs:/app/logs
+      - ./database:/database
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
