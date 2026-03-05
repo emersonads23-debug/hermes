@@ -2,7 +2,11 @@ const fs = require('fs');
 const getOpenAI = require('../config/openai');
 const logger = require('../config/logger');
 
-const SYSTEM_PROMPT = `Voce e o ContabilAI, um assistente financeiro inteligente para escritorios de contabilidade.
+function buildSystemPrompt(context = {}) {
+  const botName = context.botName || 'ContabilAI';
+  const officeName = context.officeName || 'o escritorio';
+
+  return `Voce e o ${botName}, assistente financeiro inteligente do escritorio ${officeName}.
 Voce ajuda com:
 - Consultas de notas fiscais, boletos e faturas
 - Status de pagamentos e recebimentos
@@ -11,13 +15,15 @@ Voce ajuda com:
 - Duvidas contabeis gerais
 
 Responda sempre em portugues brasileiro, de forma clara e objetiva.
-Se nao conseguir resolver o problema, informe que vai escalar para a equipe interna.
+Quando se apresentar, use seu nome "${botName}" e mencione que atende pelo escritorio "${officeName}".
+Se nao conseguir resolver o problema, informe que vai escalar para a equipe do escritorio ${officeName}.
 
 Ao analisar documentos financeiros, extraia: valores, datas, CNPJ/CPF, descricoes e categorias.`;
+}
 
-async function interpretMessage(text, conversationHistory = []) {
+async function interpretMessage(text, conversationHistory = [], context = {}) {
   const messages = [
-    { role: 'system', content: SYSTEM_PROMPT },
+    { role: 'system', content: buildSystemPrompt(context) },
     ...conversationHistory.slice(-10),
     { role: 'user', content: text },
   ];

@@ -157,7 +157,7 @@ async function handleText(text, context, phone) {
       return 'Entendi! Vou encaminhar sua solicitacao para a equipe do escritorio. Em breve alguem entrara em contato.';
 
     default: {
-      const response = await aiService.interpretMessage(text, history);
+      const response = await aiService.interpretMessage(text, history, { botName: context.botName, officeName: context.officeName });
       const needsEscalation = await aiService.shouldEscalate(text, response);
       if (needsEscalation) {
         await escalationService.createEscalation({
@@ -203,13 +203,15 @@ async function handleFinancialQuery(text, context, intent, history) {
     } else {
       return aiService.interpretMessage(
         `${text}\n\n(Nenhuma integracao financeira configurada - responda com base no conhecimento geral)`,
-        history
+        history,
+        { botName: context.botName, officeName: context.officeName }
       );
     }
 
     return aiService.interpretMessage(
       `${text}\n\nDados financeiros obtidos do sistema:\n${JSON.stringify(financialData, null, 2)}`,
-      history
+      history,
+      { botName: context.botName, officeName: context.officeName }
     );
   } catch (err) {
     logger.error('Financial query error', { error: err.message });
@@ -283,6 +285,8 @@ async function resolveContext(phone) {
     officeId: user.company.office_id,
     companyId: user.company_id,
     contactId: user.id,
+    officeName: user.company.office?.name || 'Escritorio',
+    botName: user.company.office?.bot_name || 'ContabilAI',
     integrationProvider: integration?.provider || null,
   };
 }

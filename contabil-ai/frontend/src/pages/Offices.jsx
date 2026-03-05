@@ -21,7 +21,7 @@ export default function Offices() {
   }
 
   function openEdit(office) {
-    setForm({ name: office.name, cnpj: office.cnpj, email: office.email, phone: office.phone || '' });
+    setForm({ name: office.name, cnpj: office.cnpj, email: office.email, phone: office.phone || '', bot_name: office.bot_name || '' });
     setError('');
     setModal(office.id);
   }
@@ -182,6 +182,10 @@ export default function Offices() {
             <div className="form-group">
               <label>Telefone</label>
               <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+            </div>
+            <div className="form-group">
+              <label>Nome do Bot (WhatsApp)</label>
+              <input value={form.bot_name || ''} onChange={(e) => setForm({ ...form, bot_name: e.target.value })} placeholder="Ex: Julia, Assistente Eximia..." />
             </div>
             {modal === 'create' && (
               <>

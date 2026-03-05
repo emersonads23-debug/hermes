@@ -22,6 +22,7 @@ const updateSchema = z.object({
   cnpj: z.string().min(14).max(18).optional(),
   email: z.string().email().optional(),
   phone: z.string().optional(),
+  bot_name: z.string().min(2).max(100).optional(),
 });
 
 router.use(authenticate);
