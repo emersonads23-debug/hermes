@@ -15,6 +15,10 @@ router.get('/stats', memoryController.getStats);
 router.post('/confirm-classification', memoryController.confirmClassification);
 router.post('/confirm-reconciliation', memoryController.confirmReconciliation);
 
+// Human feedback for continuous learning
+router.post('/confirm', memoryController.humanConfirm);
+router.post('/correct', memoryController.humanCorrect);
+
 // Delete a memory (admin only)
 router.delete('/:id', authorize('office_admin', 'superadmin'), memoryController.deleteMemory);
 

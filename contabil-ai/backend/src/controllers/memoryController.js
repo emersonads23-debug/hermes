@@ -48,7 +48,7 @@ async function getStats(req, res) {
       return res.status(400).json({ error: 'company_id is required' });
     }
 
-    const stats = await memoryEngine.getStats(company_id);
+    const stats = await memoryEngine.getLearningStats(company_id);
     res.json(stats);
   } catch (err) {
     logger.error('Failed to get memory stats', { error: err.message });
@@ -110,11 +110,45 @@ async function deleteMemory(req, res) {
   }
 }
 
+async function humanConfirm(req, res) {
+  try {
+    const { memory_id, company_id } = req.body;
+    if (!memory_id || !company_id) {
+      return res.status(400).json({ error: 'memory_id and company_id are required' });
+    }
+
+    const memoryLearning = require('../memory/memoryLearning');
+    const newConfidence = await memoryLearning.onHumanConfirmation(memory_id, company_id);
+    res.json({ success: true, confidence: newConfidence });
+  } catch (err) {
+    logger.error('Failed to confirm memory', { error: err.message });
+    res.status(500).json({ error: 'Failed to confirm memory' });
+  }
+}
+
+async function humanCorrect(req, res) {
+  try {
+    const { memory_id, company_id, corrected_value } = req.body;
+    if (!memory_id || !company_id) {
+      return res.status(400).json({ error: 'memory_id and company_id are required' });
+    }
+
+    const memoryLearning = require('../memory/memoryLearning');
+    const newConfidence = await memoryLearning.onHumanCorrection(memory_id, company_id, corrected_value);
+    res.json({ success: true, confidence: newConfidence });
+  } catch (err) {
+    logger.error('Failed to correct memory', { error: err.message });
+    res.status(500).json({ error: 'Failed to correct memory' });
+  }
+}
+
 module.exports = {
   getMemories,
   searchMemories,
   getStats,
   confirmClassification,
   confirmReconciliation,
+  humanConfirm,
+  humanCorrect,
   deleteMemory,
 };

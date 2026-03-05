@@ -82,9 +82,18 @@ Camada de memoria persistente que permite a IA aprender padroes por empresa:
 - Memorias sao criadas quando classificacoes e reconciliacoes sao confirmadas, ou quando padroes de transacao se repetem
 - Antes de classificar um documento ou sugerir lancamento, o sistema busca memorias existentes
 - Se uma memoria com confianca > 80% existe, ela e usada para melhorar a classificacao
-- Confianca aumenta automaticamente a cada confirmacao (+10%, max 100%)
 - Memorias de alta confianca sao injetadas como contexto nos prompts do GPT-4o (Financial Agent, Copilot)
 - Queries indexadas por company_id, memory_type e memory_key para performance
+- **Continuous Learning**: memorias melhoram automaticamente ao longo do tempo
+  - Confirmacao humana: confianca +0.05
+  - Repeticao de padrao: confianca +0.02
+  - Correcao humana: confianca -0.1
+  - Sem uso por 6 meses: confianca -0.05
+  - Se confianca < 0.3: memoria marcada como `deprecated`
+  - Rastreamento de uso: `usage_count` e `last_used_at` por memoria
+  - Metricas diarias: hits, misses, novas memorias, atualizacoes de confianca
+  - Job BullMQ diario (`memory_learning`) para manutencao automatica
+  - Fornecedores com mesma categoria >5x criam memoria `supplier_category` automaticamente
 
 ### Queue System (`backend/src/queues/`)
 Filas de processamento com Redis + BullMQ:
@@ -92,6 +101,7 @@ Filas de processamento com Redis + BullMQ:
 - `document_processing` - classificacao de documentos
 - `financial_analysis` - analises financeiras
 - `copilot_analysis` - avaliacao autonoma do copilot
+- `memory_learning` - aprendizado continuo e manutencao de memorias
 - `alerts` - entrega de alertas
 
 ### Human Task System
@@ -188,9 +198,11 @@ POST /api/copilot/ask       { company_id, question }
 ```
 GET    /api/memory?company_id=&memory_type=&min_confidence=0.8&limit=50
 GET    /api/memory/search?company_id=&q=&memory_type=
-GET    /api/memory/stats?company_id=
+GET    /api/memory/stats?company_id=      # Returns: total, active, deprecated, accuracy, byType, recentMetrics
 POST   /api/memory/confirm-classification  { company_id, supplier, classification, account_code, category }
 POST   /api/memory/confirm-reconciliation  { company_id, description, category, account_code, amount }
+POST   /api/memory/confirm                 { memory_id, company_id }           # Human confirmation (+0.05)
+POST   /api/memory/correct                 { memory_id, company_id, corrected_value }  # Human correction (-0.1)
 DELETE /api/memory/:id
 ```
 

@@ -130,23 +130,58 @@ async function deleteMemory(id) {
   if (error) throw error;
 }
 
+async function recordUsage(id) {
+  const { data, error } = await supabase
+    .from('ai_memories')
+    .select('usage_count')
+    .eq('id', id)
+    .single();
+
+  if (error || !data) return;
+
+  await supabase
+    .from('ai_memories')
+    .update({ usage_count: (data.usage_count || 0) + 1, last_used_at: new Date().toISOString() })
+    .eq('id', id);
+}
+
+async function findActiveMemories(companyId, { minConfidence = 0, limit = 100 } = {}) {
+  const { data, error } = await supabase
+    .from('ai_memories')
+    .select('*')
+    .eq('company_id', companyId)
+    .eq('status', 'active')
+    .gte('confidence', minConfidence)
+    .order('updated_at', { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+  return data || [];
+}
+
 async function getMemoryStats(companyId) {
   const { data, error } = await supabase
     .from('ai_memories')
-    .select('memory_type, confidence')
+    .select('memory_type, confidence, status')
     .eq('company_id', companyId);
 
   if (error) throw error;
 
+  const all = data || [];
   const stats = {};
   for (const type of VALID_MEMORY_TYPES) {
-    const items = (data || []).filter((m) => m.memory_type === type);
+    const items = all.filter((m) => m.memory_type === type);
+    const active = items.filter((m) => m.status === 'active');
     stats[type] = {
       count: items.length,
-      avgConfidence: items.length ? items.reduce((s, m) => s + m.confidence, 0) / items.length : 0,
+      active: active.length,
+      avgConfidence: active.length ? active.reduce((s, m) => s + m.confidence, 0) / active.length : 0,
     };
   }
-  stats.total = (data || []).length;
+  stats.total = all.length;
+  stats.totalActive = all.filter((m) => m.status === 'active').length;
+  stats.totalDeprecated = all.filter((m) => m.status === 'deprecated').length;
+  stats.totalCandidates = all.filter((m) => m.status === 'candidate').length;
   return stats;
 }
 
@@ -160,5 +195,7 @@ module.exports = {
   findAllMemories,
   searchMemories,
   deleteMemory,
+  recordUsage,
+  findActiveMemories,
   getMemoryStats,
 };

@@ -14,6 +14,7 @@ const QUEUES = {
   DOCUMENT_PROCESSING: 'document_processing',
   FINANCIAL_ANALYSIS: 'financial_analysis',
   COPILOT_ANALYSIS: 'copilot_analysis',
+  MEMORY_LEARNING: 'memory_learning',
   ALERTS: 'alerts',
 };
 
@@ -100,6 +101,10 @@ async function addCopilotJob(companyId, triggerType = 'daily', data = {}) {
   });
 }
 
+async function addMemoryLearningJob(jobType = 'daily', data = {}) {
+  return getQueue(QUEUES.MEMORY_LEARNING).add(jobType, data);
+}
+
 async function addAlertJob(alertData) {
   return getQueue(QUEUES.ALERTS).add('send-alert', alertData, {
     priority: alertData.severity === 'critical' ? 1 : 3,
@@ -140,6 +145,7 @@ module.exports = {
   addDocumentJob,
   addFinancialAnalysisJob,
   addCopilotJob,
+  addMemoryLearningJob,
   addAlertJob,
   getQueueStats,
   closeAll,

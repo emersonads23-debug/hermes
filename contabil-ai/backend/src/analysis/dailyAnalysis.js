@@ -3,7 +3,7 @@ const logger = require('../config/logger');
 const financialMemory = require('./financialMemory');
 const financialAgent = require('../agents/financialAgent');
 const alertEngine = require('../alerts/alertEngine');
-const { addAlertJob, addCopilotJob } = require('../queues');
+const { addAlertJob, addCopilotJob, addMemoryLearningJob } = require('../queues');
 
 const BATCH_SIZE = 10;
 
@@ -46,6 +46,11 @@ async function runDailyAnalysis() {
       })
     );
   }
+
+  // Queue daily memory learning job after all companies are processed
+  await addMemoryLearningJob('daily').catch((err) => {
+    logger.warn('Memory learning job queue failed', { error: err.message });
+  });
 
   const duration = Math.round((Date.now() - startTime) / 1000);
   logger.info('Daily analysis completed', { processed, failed, total: companies.length, durationSeconds: duration });

@@ -9,14 +9,22 @@ async function enhanceClassification(companyId, classificationResult) {
 
   const enhanced = { ...classificationResult, memory_applied: false };
 
+  const memoryLearning = require('./memoryLearning');
+  let hadHit = false;
+
   // Check supplier category memory
   if (extracted_fields.supplier) {
     const supplierMemory = await memoryService.lookupSupplierCategory(companyId, extracted_fields.supplier);
     if (supplierMemory) {
+      hadHit = true;
       enhanced.memory_applied = true;
       enhanced.memory_hints = enhanced.memory_hints || {};
       enhanced.memory_hints.supplier_category = supplierMemory.memory_value.category;
       enhanced.memory_hints.supplier_confidence = supplierMemory.confidence;
+
+      // Track usage
+      await memoryQueries.recordUsage(supplierMemory.id);
+      await memoryLearning.recordMemoryHit(companyId, supplierMemory.id);
 
       // If AI classification had low confidence but memory is strong, boost it
       if (classificationResult.confidence < 80 && supplierMemory.confidence >= 0.9) {
@@ -37,11 +45,21 @@ async function enhanceClassification(companyId, classificationResult) {
     const key = extracted_fields.description || extracted_fields.supplier;
     const accountMemory = await memoryService.lookupAccountMapping(companyId, key);
     if (accountMemory) {
+      hadHit = true;
       enhanced.memory_applied = true;
       enhanced.memory_hints = enhanced.memory_hints || {};
       enhanced.memory_hints.account_code = accountMemory.memory_value.account_code;
       enhanced.memory_hints.account_confidence = accountMemory.confidence;
+
+      // Track usage
+      await memoryQueries.recordUsage(accountMemory.id);
+      await memoryLearning.recordMemoryHit(companyId, accountMemory.id);
     }
+  }
+
+  // If no memory matched, record a miss and create candidate
+  if (!hadHit && extracted_fields.supplier) {
+    await memoryLearning.recordMemoryMiss(companyId);
   }
 
   return enhanced;
@@ -140,6 +158,12 @@ async function getStats(companyId) {
   return memoryQueries.getMemoryStats(companyId);
 }
 
+// Get extended learning stats for a company
+async function getLearningStats(companyId) {
+  const memoryLearning = require('./memoryLearning');
+  return memoryLearning.getLearningStats(companyId);
+}
+
 function normalizePatternKey(str) {
   return str
     .toLowerCase()
@@ -171,4 +195,5 @@ module.exports = {
   detectAndLearnPatterns,
   getMemoryContext,
   getStats,
+  getLearningStats,
 };

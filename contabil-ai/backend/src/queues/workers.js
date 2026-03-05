@@ -86,6 +86,26 @@ function startWorkers() {
     return copilotEngine.evaluateCompany(companyId, triggerType);
   }, 2);
 
+  // Memory learning worker
+  registerWorker(QUEUES.MEMORY_LEARNING, async (job) => {
+    logger.info('Running memory learning job', { jobId: job.id, type: job.name });
+
+    const memoryLearning = require('../memory/memoryLearning');
+
+    switch (job.name) {
+      case 'daily':
+        return memoryLearning.runDailyLearningJob();
+
+      case 'detect-patterns': {
+        const { companyId, transactions } = job.data;
+        return memoryLearning.detectSupplierPatterns(companyId, transactions);
+      }
+
+      default:
+        return memoryLearning.runDailyLearningJob();
+    }
+  }, 1);
+
   // Alert delivery worker
   registerWorker(QUEUES.ALERTS, async (job) => {
     const alertEngine = require('../alerts/alertEngine');
