@@ -24,8 +24,8 @@ CREATE TABLE IF NOT EXISTS memory_metrics (
   UNIQUE(company_id, date)
 );
 
-CREATE INDEX idx_memory_metrics_company ON memory_metrics(company_id);
-CREATE INDEX idx_memory_metrics_date ON memory_metrics(date);
+CREATE INDEX IF NOT EXISTS idx_memory_metrics_company ON memory_metrics(company_id);
+CREATE INDEX IF NOT EXISTS idx_memory_metrics_date ON memory_metrics(date);
 
 -- Enable RLS
 ALTER TABLE memory_metrics ENABLE ROW LEVEL SECURITY;
