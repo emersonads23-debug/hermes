@@ -59,8 +59,8 @@ export default function Offices() {
     try {
       const res = await api.get(`/evolution/${office.id}/status`);
       setEvoStatus(res.data);
-    } catch {
-      setEvoStatus({ state: 'error' });
+    } catch (err) {
+      setEvoStatus({ configured: false, state: 'not_configured', error: err.response?.data?.error || 'Evolution API indisponivel' });
     }
     setEvoLoading(false);
   }

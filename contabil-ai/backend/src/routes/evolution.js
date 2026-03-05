@@ -29,11 +29,15 @@ router.get('/:officeId/status', asyncHandler(async (req, res) => {
     return res.json({ configured: false, state: 'not_configured' });
   }
 
+  if (!env.evolution.apiUrl || !env.evolution.apiKey) {
+    return res.json({ configured: true, instance: office.evolution_instance_name, state: 'api_not_configured', error: 'Evolution API nao configurada no servidor' });
+  }
+
   try {
     const response = await evoApi.get(`/instance/connectionState/${office.evolution_instance_name}`);
     res.json({ configured: true, instance: office.evolution_instance_name, ...response.data });
-  } catch (err) {
-    res.json({ configured: true, instance: office.evolution_instance_name, state: 'disconnected', error: err.message });
+  } catch {
+    res.json({ configured: true, instance: office.evolution_instance_name, state: 'disconnected', error: 'Evolution API indisponivel' });
   }
 }));
 

@@ -5,20 +5,22 @@
 }
 
 :root {
-  --primary: #2563eb;
-  --primary-dark: #1d4ed8;
-  --secondary: #64748b;
+  --primary: #102c26;
+  --primary-dark: #0a1e19;
+  --primary-light: #1a4d3f;
+  --secondary: #5a6b65;
   --success: #16a34a;
   --danger: #dc2626;
   --warning: #d97706;
-  --bg: #f8fafc;
+  --bg: #faf6f0;
   --bg-card: #ffffff;
-  --text: #1e293b;
-  --text-light: #64748b;
-  --border: #e2e8f0;
-  --sidebar-bg: #1e293b;
-  --sidebar-text: #cbd5e1;
-  --sidebar-active: #2563eb;
+  --text: #102c26;
+  --text-light: #5a6b65;
+  --border: #e8dfd4;
+  --sidebar-bg: #102c26;
+  --sidebar-text: #c8bfa8;
+  --sidebar-active: #f7e7ce;
+  --accent: #f7e7ce;
   --radius: 8px;
 }
 
@@ -58,8 +60,8 @@ body {
   padding: 0 1.5rem 1.5rem;
   font-size: 1.4rem;
   font-weight: 700;
-  color: #fff;
-  border-bottom: 1px solid rgba(255,255,255,0.1);
+  color: var(--accent);
+  border-bottom: 1px solid rgba(247,231,206,0.15);
   margin-bottom: 1rem;
 }
 
@@ -75,12 +77,13 @@ body {
 
 .sidebar-nav a:hover,
 .sidebar-nav a.active {
-  background: rgba(255,255,255,0.1);
-  color: #fff;
+  background: rgba(247,231,206,0.1);
+  color: var(--accent);
 }
 
 .sidebar-nav a.active {
   border-left: 3px solid var(--sidebar-active);
+  color: var(--accent);
 }
 
 .main-content {
@@ -98,6 +101,7 @@ body {
 
 .main-header h1 {
   font-size: 1.5rem;
+  color: var(--primary);
 }
 
 /* Cards */
@@ -121,6 +125,7 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 1.5rem;
+  border-top: 3px solid var(--primary);
 }
 
 .stat-card .label {
@@ -132,6 +137,7 @@ body {
 .stat-card .value {
   font-size: 2rem;
   font-weight: 700;
+  color: var(--primary);
 }
 
 /* Table */
@@ -154,15 +160,15 @@ th, td {
 }
 
 th {
-  background: var(--bg);
+  background: var(--accent);
   font-weight: 600;
   font-size: 0.85rem;
   text-transform: uppercase;
-  color: var(--text-light);
+  color: var(--primary);
 }
 
 tr:hover {
-  background: var(--bg);
+  background: #fdf8f2;
 }
 
 /* Buttons */
@@ -180,11 +186,16 @@ tr:hover {
 
 .btn-primary {
   background: var(--primary);
-  color: #fff;
+  color: var(--accent);
 }
 
 .btn-primary:hover {
   background: var(--primary-dark);
+}
+
+.btn-success {
+  background: var(--success);
+  color: #fff;
 }
 
 .btn-danger {
@@ -193,9 +204,9 @@ tr:hover {
 }
 
 .btn-secondary {
-  background: var(--bg);
+  background: var(--accent);
   border: 1px solid var(--border);
-  color: var(--text);
+  color: var(--primary);
 }
 
 .btn-sm {
@@ -223,13 +234,14 @@ tr:hover {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   font-size: 0.9rem;
+  background: #fff;
 }
 
 .form-group input:focus,
 .form-group select:focus {
   outline: none;
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+  box-shadow: 0 0 0 3px rgba(16, 44, 38, 0.1);
 }
 
 /* Modal */
@@ -239,7 +251,7 @@ tr:hover {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0,0,0,0.5);
+  background: rgba(16,44,38,0.5);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -258,6 +270,7 @@ tr:hover {
 
 .modal h2 {
   margin-bottom: 1.5rem;
+  color: var(--primary);
 }
 
 .modal-actions {
@@ -266,6 +279,11 @@ tr:hover {
   justify-content: flex-end;
   margin-top: 1.5rem;
 }
+
+/* Alert */
+.alert { padding: 0.75rem; border-radius: var(--radius); margin-bottom: 1rem; font-size: 0.9rem; }
+.alert-danger { background: #fee2e2; color: #991b1b; }
+.alert-warning { background: #fef3c7; color: #92400e; }
 
 /* Badge */
 .badge {
@@ -279,7 +297,7 @@ tr:hover {
 .badge-success { background: #dcfce7; color: #166534; }
 .badge-warning { background: #fef3c7; color: #92400e; }
 .badge-danger { background: #fee2e2; color: #991b1b; }
-.badge-info { background: #dbeafe; color: #1e40af; }
+.badge-info { background: var(--accent); color: var(--primary); }
 
 /* Login page */
 .login-page {
@@ -287,7 +305,7 @@ tr:hover {
   align-items: center;
   justify-content: center;
   min-height: 100vh;
-  background: linear-gradient(135deg, #1e293b, #334155);
+  background: linear-gradient(135deg, #102c26, #1a4d3f);
 }
 
 .login-card {
@@ -296,7 +314,7 @@ tr:hover {
   border-radius: var(--radius);
   width: 100%;
   max-width: 400px;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  box-shadow: 0 20px 60px rgba(16,44,38,0.4);
 }
 
 .login-card h1 {
