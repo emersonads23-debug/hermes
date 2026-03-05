@@ -7,13 +7,14 @@ services:
       dockerfile: Dockerfile
     container_name: contabilai-backend-dev
     restart: unless-stopped
-    env_file: .env
+    env_file: ./backend/.env
     environment:
       - NODE_ENV=development
       - EVOLUTION_API_URL=http://evolution:8080
       - N8N_WEBHOOK_URL=http://n8n:5678/webhook
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - REDIS_PASSWORD=
     ports:
       - "3000:3000"
     volumes:

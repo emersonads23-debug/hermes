@@ -13,13 +13,13 @@ echo " ContabilAI - Setup Local Environment"
 echo "========================================="
 echo ""
 
-# 1. Create .env from template if it doesn't exist
-if [ ! -f .env ]; then
-  cp .env.example .env
-  echo "[OK] .env created from .env.example"
+# 1. Create backend/.env from template if it doesn't exist
+if [ ! -f backend/.env ]; then
+  cp .env.example backend/.env
+  echo "[OK] backend/.env created from .env.example"
   echo ""
-  echo "  IMPORTANT: Edit .env and fill in your credentials:"
-  echo "  - SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, DATABASE_URL"
+  echo "  IMPORTANT: Edit backend/.env and fill in your credentials:"
+  echo "  - SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, DATABASE_URL"
   echo "  - JWT_SECRET (generate: openssl rand -hex 64)"
   echo "  - ENCRYPTION_KEY (generate: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\")"
   echo "  - OPENAI_API_KEY"
@@ -28,7 +28,7 @@ if [ ! -f .env ]; then
   echo "  - OMIE_APP_KEY and OMIE_APP_SECRET (if using Omie)"
   echo ""
 else
-  echo "[OK] .env already exists"
+  echo "[OK] backend/.env already exists"
 fi
 
 # 2. Install backend dependencies
@@ -56,7 +56,7 @@ echo "========================================="
 echo ""
 echo " Next steps:"
 echo ""
-echo " 1. Edit .env with your real credentials"
+echo " 1. Edit backend/.env with your real credentials"
 echo ""
 echo " 2. Start with Docker (recommended):"
 echo "    docker compose -f docker-compose.dev.yml up --build"

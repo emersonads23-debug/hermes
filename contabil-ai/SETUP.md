@@ -91,16 +91,18 @@ bash scripts/setup.sh
 ```
 
 O script `setup.sh` faz:
-- Cria `.env` a partir de `.env.example`
+- Cria `backend/.env` a partir de `.env.example`
 - Instala dependencias do backend (`npm install`)
 - Instala dependencias do frontend (`npm install`)
 - Cria diretorios `uploads/` e `logs/`
 
 ### 3.2 Configurar variaveis de ambiente
 
+O arquivo `.env` fica em `backend/.env`. Docker Compose e os scripts ja apontam para esse caminho.
+
 ```bash
-# Editar .env com suas credenciais
-nano .env
+# Editar backend/.env com suas credenciais
+nano backend/.env
 ```
 
 Veja a secao [5. Variaveis de Ambiente](#5-variaveis-de-ambiente) para detalhes de cada variavel.
@@ -230,7 +232,7 @@ Cria:
 Copie `.env.example` para `.env` e preencha:
 
 ```bash
-cp .env.example .env
+cp .env.example backend/.env
 ```
 
 ### Servidor
@@ -257,7 +259,15 @@ cp .env.example .env
 | `SUPABASE_URL` | URL do projeto | Sim |
 | `SUPABASE_ANON_KEY` | Chave publica | Sim |
 | `SUPABASE_SERVICE_ROLE_KEY` | Chave de servico | Sim |
-| `DATABASE_URL` | Connection string PostgreSQL | Sim (para migrations) |
+| `DATABASE_URL` | Connection string PostgreSQL (usar porta 6543 do pooler) | Sim (para migrations) |
+
+**Importante sobre Supabase keys:**
+- `SUPABASE_ANON_KEY`: chave publica, usada no frontend e para operacoes do lado do cliente
+- `SUPABASE_SERVICE_ROLE_KEY`: chave privada com acesso total, **nunca exponha no frontend**
+- `DATABASE_URL`: use o **Transaction Pooler** (porta `6543`), nao a conexao direta (porta `5432`), para melhor gerenciamento de conexoes
+
+Obtenha as keys em: **Supabase Dashboard > Settings > API**
+Obtenha o DATABASE_URL em: **Settings > Database > Connection string > URI > Transaction pooler**
 
 ### Redis
 
@@ -330,7 +340,19 @@ Servicos iniciados:
 
 ### 6.2 Producao
 
+**Importante:** O Docker Compose usa duas fontes de variaveis:
+- `env_file: ./backend/.env` — injeta variaveis dentro dos containers
+- `.env` na raiz do projeto — usada para interpolacao no YAML (`${VAR:-default}`)
+
+Para producao com senha no Redis, exporte a variavel antes de subir:
+
 ```bash
+# Opcao A: exportar na shell
+export REDIS_PASSWORD=sua-senha-forte
+docker compose up --build -d
+
+# Opcao B: criar .env na raiz so com variaveis do Compose
+echo "REDIS_PASSWORD=sua-senha-forte" > .env
 docker compose up --build -d
 ```
 

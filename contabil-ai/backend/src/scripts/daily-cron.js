@@ -12,7 +12,7 @@
  * Or trigger via n8n daily-report workflow.
  */
 
-require('dotenv').config({ path: require('path').resolve(__dirname, '../../../.env') });
+require('dotenv').config({ path: require('path').resolve(__dirname, '../../.env') });
 
 const logger = require('../config/logger');
 

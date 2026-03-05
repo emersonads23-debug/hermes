@@ -10,7 +10,7 @@
  * Requires N8N_API_URL and N8N_API_KEY (or N8N_USER/N8N_PASSWORD) in .env
  */
 
-require('dotenv').config({ path: require('path').resolve(__dirname, '../../../.env') });
+require('dotenv').config({ path: require('path').resolve(__dirname, '../../.env') });
 
 const fs = require('fs');
 const path = require('path');

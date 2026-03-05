@@ -54,6 +54,14 @@ const env = {
 
   escalationEmail: process.env.ESCALATION_EMAIL,
 
+  redis: {
+    host: process.env.REDIS_HOST || 'localhost',
+    port: parseInt(process.env.REDIS_PORT, 10) || 6379,
+    password: process.env.REDIS_PASSWORD || undefined,
+  },
+
+  encryptionKey: process.env.ENCRYPTION_KEY,
+
   upload: {
     maxFileSizeMb: parseInt(process.env.MAX_FILE_SIZE_MB, 10) || 25,
     dir: process.env.UPLOAD_DIR || './uploads',
@@ -61,11 +69,11 @@ const env = {
 };
 
 // Startup validation for critical variables
-const required = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'JWT_SECRET'];
+const required = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY', 'JWT_SECRET'];
 const missing = required.filter((key) => !process.env[key]);
 if (missing.length > 0) {
   console.error(`FATAL: Missing required environment variables: ${missing.join(', ')}`);
-  console.error('Copy .env.example to .env and fill in the required values.');
+  console.error('Copy .env.example to backend/.env and fill in the required values.');
   process.exit(1);
 }
 
