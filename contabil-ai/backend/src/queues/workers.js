@@ -1,0 +1,89 @@
+const { registerWorker, QUEUES, addAlertJob } = require('./index');
+const logger = require('../config/logger');
+
+function startWorkers() {
+  // Message processing worker
+  registerWorker(QUEUES.MESSAGE_PROCESSING, async (job) => {
+    const { phone, messageType, content, officeId, companyId } = job.data;
+    logger.info('Processing message', { jobId: job.id, phone, messageType });
+
+    const aiService = require('../services/aiService');
+
+    if (messageType === 'text') {
+      const intent = await aiService.classifyIntent(content);
+      const response = await aiService.interpretMessage(content);
+      return { intent, response };
+    }
+
+    return { processed: true };
+  }, 5);
+
+  // Document processing worker
+  registerWorker(QUEUES.DOCUMENT_PROCESSING, async (job) => {
+    const { documentId } = job.data;
+    logger.info('Processing document', { jobId: job.id, documentId });
+
+    const documentIntelligence = require('../ocr/documentIntelligence');
+    return documentIntelligence.processDocument(documentId);
+  }, 3);
+
+  // Financial analysis worker
+  registerWorker(QUEUES.FINANCIAL_ANALYSIS, async (job) => {
+    const { companyId } = job.data;
+    logger.info('Running financial analysis', { jobId: job.id, type: job.name, companyId });
+
+    const financialAgent = require('../agents/financialAgent');
+    const financialMemory = require('../analysis/financialMemory');
+
+    switch (job.name) {
+      case 'daily-analysis': {
+        const context = await financialMemory.getCompanyFinancialContext(companyId);
+        if (context.latestSnapshot) {
+          const result = await financialAgent.generateFinancialSummary(companyId, context.latestSnapshot);
+
+          // Send critical alerts
+          if (result.insights) {
+            for (const insight of result.insights) {
+              if (insight.severity === 'critical') {
+                await addAlertJob({
+                  companyId,
+                  alertType: insight.type,
+                  title: insight.title,
+                  message: insight.description,
+                  severity: 'critical',
+                });
+              }
+            }
+          }
+          return result;
+        }
+        return { skipped: true, reason: 'no_snapshot' };
+      }
+
+      case 'cash-flow':
+        return financialAgent.analyzeCashFlow(companyId, job.data);
+
+      case 'revenue-trends': {
+        const snapshots = await financialMemory.getSnapshots(companyId, { days: 180 });
+        return financialAgent.analyzeRevenueTrends(companyId, snapshots);
+      }
+
+      case 'detect-patterns':
+        return financialMemory.detectPatterns(companyId);
+
+      default:
+        logger.warn('Unknown analysis type', { type: job.name });
+        return null;
+    }
+  }, 2);
+
+  // Alert delivery worker
+  registerWorker(QUEUES.ALERTS, async (job) => {
+    const alertEngine = require('../alerts/alertEngine');
+    return alertEngine.deliverAlert(job.data);
+  }, 5);
+
+  logger.info('All queue workers started');
+}
+
+module.exports = { startWorkers };

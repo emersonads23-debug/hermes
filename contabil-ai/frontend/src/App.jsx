@@ -8,6 +8,8 @@ import Companies from './pages/Companies';
 import Users from './pages/Users';
 import Escalations from './pages/Escalations';
 import Integrations from './pages/Integrations';
+import FinancialDashboard from './pages/FinancialDashboard';
+import Tasks from './pages/Tasks';
 
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
@@ -25,6 +27,8 @@ export default function App() {
         <Route path="companies" element={<Companies />} />
         <Route path="users" element={<Users />} />
         <Route path="escalations" element={<Escalations />} />
+        <Route path="financial" element={<FinancialDashboard />} />
+        <Route path="tasks" element={<Tasks />} />
         <Route path="integrations" element={<Integrations />} />
       </Route>
     </Routes>

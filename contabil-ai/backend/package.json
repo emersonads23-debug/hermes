@@ -12,9 +12,11 @@
     "migrate:status": "node src/scripts/migrate.js --status",
     "seed": "node src/scripts/seed.js",
     "deploy:workflows": "node src/scripts/deploy-workflows.js",
-    "deploy:workflows:dry": "node src/scripts/deploy-workflows.js --dry-run"
+    "deploy:workflows:dry": "node src/scripts/deploy-workflows.js --dry-run",
+    "cron:daily": "node src/scripts/daily-cron.js"
   },
   "dependencies": {
+    "bullmq": "^5.1.0",
     "@supabase/supabase-js": "^2.39.0",
     "axios": "^1.6.0",
     "bcryptjs": "^2.4.3",

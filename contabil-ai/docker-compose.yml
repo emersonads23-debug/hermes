@@ -13,7 +13,11 @@ services:
     volumes:
       - uploads:/app/uploads
       - logs:/app/logs
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     depends_on:
+      - redis
       - n8n
     networks:
       - contabilai
@@ -29,6 +33,16 @@ services:
       - "443:443"
     depends_on:
       - backend
+    networks:
+      - contabilai
+
+  redis:
+    image: redis:7-alpine
+    container_name: contabilai-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
     networks:
       - contabilai
 
@@ -79,6 +93,7 @@ services:
 volumes:
   uploads:
   logs:
+  redis_data:
   n8n_data:
   evolution_data:
 

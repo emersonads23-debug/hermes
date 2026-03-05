@@ -17,6 +17,8 @@ const userRoutes = require('./routes/users');
 const webhookRoutes = require('./routes/webhook');
 const integrationRoutes = require('./routes/integrations');
 const escalationRoutes = require('./routes/escalations');
+const taskRoutes = require('./routes/tasks');
+const financialRoutes = require('./routes/financial');
 
 const app = express();
 
@@ -49,12 +51,22 @@ app.use('/api/companies', tenantLimiter, companyRoutes);
 app.use('/api/users', tenantLimiter, userRoutes);
 app.use('/api/integrations', integrationLimiter, integrationRoutes);
 app.use('/api/escalations', tenantLimiter, escalationRoutes);
+app.use('/api/tasks', tenantLimiter, taskRoutes);
+app.use('/api/financial', tenantLimiter, financialRoutes);
 
 // Health check endpoint — checks all integration statuses
 app.get('/api/health', async (_req, res) => {
   const { healthCheck: supabaseHealth } = require('./config/supabase');
   const whatsappService = require('./services/whatsappService');
   const n8nService = require('./services/n8nService');
+
+  let queueStats = null;
+  if (process.env.REDIS_HOST || process.env.REDIS_URL) {
+    try {
+      const { getQueueStats } = require('./queues');
+      queueStats = await getQueueStats();
+    } catch { /* Redis not available */ }
+  }
 
   const [db, whatsapp, n8n] = await Promise.allSettled([
     supabaseHealth(),
@@ -66,6 +78,7 @@ app.get('/api/health', async (_req, res) => {
     database: db.status === 'fulfilled' ? db.value : { healthy: false, error: db.reason?.message },
     whatsapp: whatsapp.status === 'fulfilled' ? whatsapp.value : { healthy: false, error: whatsapp.reason?.message },
     n8n: n8n.status === 'fulfilled' ? n8n.value : { healthy: false, error: n8n.reason?.message },
+    queues: queueStats || { healthy: false, error: 'Redis not configured' },
   };
 
   const allHealthy = Object.values(checks).every((c) => c.healthy);
@@ -127,12 +140,40 @@ async function startServer() {
     }
   }
 
+  // Start queue workers (if Redis is available)
+  if (process.env.REDIS_HOST || process.env.REDIS_URL) {
+    try {
+      const { startWorkers } = require('./queues/workers');
+      startWorkers();
+      logger.info('Queue workers started');
+    } catch (err) {
+      logger.warn('Queue workers failed to start (Redis may not be available)', { error: err.message });
+    }
+  }
+
   // Start listening
-  app.listen(env.port, () => {
+  const server = app.listen(env.port, () => {
     logger.info(`ContabilAI server running on port ${env.port} [${env.nodeEnv}]`);
     logger.info(`API: ${env.apiUrl}`);
     logger.info(`Frontend: ${env.frontendUrl}`);
   });
+
+  // Graceful shutdown
+  for (const signal of ['SIGTERM', 'SIGINT']) {
+    process.on(signal, async () => {
+      logger.info(`${signal} received, shutting down gracefully...`);
+      server.close();
+      try {
+        const { closeAll } = require('./queues');
+        await closeAll();
+      } catch { /* ignore */ }
+      try {
+        const { close } = require('./config/database');
+        await close();
+      } catch { /* ignore */ }
+      process.exit(0);
+    });
+  }
 }
 
 startServer().catch((err) => {

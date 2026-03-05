@@ -12,6 +12,8 @@ services:
       - NODE_ENV=development
       - EVOLUTION_API_URL=http://evolution:8080
       - N8N_WEBHOOK_URL=http://n8n:5678/webhook
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     ports:
       - "3000:3000"
     volumes:
@@ -20,8 +22,20 @@ services:
       - logs:/app/logs
     command: npx nodemon src/server.js
     depends_on:
+      - redis
       - n8n
       - evolution
+    networks:
+      - contabilai
+
+  redis:
+    image: redis:7-alpine
+    container_name: contabilai-redis-dev
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
     networks:
       - contabilai
 
@@ -67,6 +81,7 @@ services:
 volumes:
   uploads:
   logs:
+  redis_data:
   n8n_data:
   evolution_data:
 

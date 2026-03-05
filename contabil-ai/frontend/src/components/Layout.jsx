@@ -29,6 +29,12 @@ export default function Layout() {
           <NavLink to="/users">
             <span>Usuarios</span>
           </NavLink>
+          <NavLink to="/financial">
+            <span>Financeiro</span>
+          </NavLink>
+          <NavLink to="/tasks">
+            <span>Tarefas</span>
+          </NavLink>
           <NavLink to="/escalations">
             <span>Escalacoes</span>
           </NavLink>
