@@ -12,6 +12,15 @@ const supabase = require('../config/supabase');
 const env = require('../config/env');
 const logger = require('../config/logger');
 
+const MIME_TYPES = {
+  pdf: 'application/pdf',
+  jpg: 'image/jpeg', jpeg: 'image/jpeg',
+  png: 'image/png', webp: 'image/webp',
+  doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  csv: 'text/csv', txt: 'text/plain', xml: 'application/xml',
+};
+
 async function handleEvolutionWebhook(req, res) {
   // Always respond 200 quickly to Evolution (avoid webhook retries)
   res.status(200).json({ status: 'received' });
@@ -20,7 +29,7 @@ async function handleEvolutionWebhook(req, res) {
     // Validate webhook signature if configured
     if (env.evolution.webhookSecret) {
       const signature = req.headers['x-webhook-signature'] || req.headers['x-evolution-signature'];
-      const rawBody = JSON.stringify(req.body);
+      const rawBody = req.rawBody || JSON.stringify(req.body);
       if (!whatsappService.validateWebhookSignature(rawBody, signature)) {
         logger.warn('Invalid webhook signature', { ip: req.ip });
         return;
@@ -216,48 +225,77 @@ async function handleFinancialQuery(text, context, intent, history) {
 
 async function handleAudio(message, context, phone, messageId) {
   const media = await whatsappService.downloadMedia(messageId);
+  if (media.base64 && Buffer.byteLength(media.base64, 'base64') > MAX_FILE_SIZE_BYTES) {
+    return 'Desculpe, o arquivo enviado excede o limite de 25MB.';
+  }
   const filePath = path.join(env.upload.dir, `${uuidv4()}.ogg`);
-  fs.writeFileSync(filePath, Buffer.from(media.base64, 'base64'));
-
-  const result = await documentService.processAudio(filePath);
-  return handleText(result.transcription, context, phone);
+  try {
+    fs.writeFileSync(filePath, Buffer.from(media.base64, 'base64'));
+    const result = await documentService.processAudio(filePath);
+    return handleText(result.transcription, context, phone);
+  } finally {
+    try { fs.unlinkSync(filePath); } catch {}
+  }
 }
 
 async function handleImage(message, context, phone, messageId) {
   const media = await whatsappService.downloadMedia(messageId);
+  if (media.base64 && Buffer.byteLength(media.base64, 'base64') > MAX_FILE_SIZE_BYTES) {
+    return 'Desculpe, o arquivo enviado excede o limite de 25MB.';
+  }
   const filePath = path.join(env.upload.dir, `${uuidv4()}.jpg`);
-  fs.writeFileSync(filePath, Buffer.from(media.base64, 'base64'));
+  try {
+    fs.writeFileSync(filePath, Buffer.from(media.base64, 'base64'));
 
-  const result = await documentService.processImage(filePath);
+    const result = await documentService.processImage(filePath);
 
-  await supabase.from('documents').insert({
-    office_id: context.officeId,
-    company_id: context.companyId,
-    file_path: filePath,
-    type: 'image',
-    analysis: result.analysis,
-  });
+    await supabase.from('documents').insert({
+      office_id: context.officeId,
+      company_id: context.companyId,
+      file_path: filePath,
+      type: 'image',
+      mime_type: 'image/jpeg',
+      analysis: result.analysis,
+    });
 
-  return `Analisei a imagem enviada:\n\n${result.analysis}`;
+    return `Analisei a imagem enviada:\n\n${result.analysis}`;
+  } finally {
+    try { fs.unlinkSync(filePath); } catch {}
+  }
 }
+
+const ALLOWED_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png', 'webp', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'txt', 'xml', 'ogg', 'mp3', 'mp4'];
+const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024; // 25MB
 
 async function handleDocument(message, context, phone, messageId) {
   const media = await whatsappService.downloadMedia(messageId);
-  const ext = message.documentMessage?.fileName?.split('.').pop() || 'pdf';
+  const rawExt = (message.documentMessage?.fileName?.split('.').pop() || 'pdf').toLowerCase();
+  const ext = ALLOWED_EXTENSIONS.includes(rawExt) ? rawExt : 'pdf';
+
+  // Validate file size (base64 is ~1.33x of actual file size)
+  if (media.base64 && Buffer.byteLength(media.base64, 'base64') > MAX_FILE_SIZE_BYTES) {
+    return 'Desculpe, o arquivo enviado excede o limite de 25MB.';
+  }
+
   const filePath = path.join(env.upload.dir, `${uuidv4()}.${ext}`);
-  fs.writeFileSync(filePath, Buffer.from(media.base64, 'base64'));
+  try {
+    fs.writeFileSync(filePath, Buffer.from(media.base64, 'base64'));
 
-  const result = await documentService.processDocument(filePath);
+    const result = await documentService.processDocument(filePath);
 
-  await supabase.from('documents').insert({
-    office_id: context.officeId,
-    company_id: context.companyId,
-    file_path: filePath,
-    type: ext,
-    analysis: result.analysis,
-  });
+    await supabase.from('documents').insert({
+      office_id: context.officeId,
+      company_id: context.companyId,
+      file_path: filePath,
+      type: ext,
+      mime_type: MIME_TYPES[ext] || message.documentMessage?.mimetype || 'application/octet-stream',
+      analysis: result.analysis,
+    });
 
-  return `Analisei o documento enviado:\n\n${result.analysis}`;
+    return `Analisei o documento enviado:\n\n${result.analysis}`;
+  } finally {
+    try { fs.unlinkSync(filePath); } catch {}
+  }
 }
 
 async function resolveContext(phone) {
@@ -294,7 +332,7 @@ async function getConversationHistory(context, phone) {
     .limit(10);
 
   if (!data) return [];
-  return data.reverse().map((m) => ({
+  return [...data].reverse().map((m) => ({
     role: m.direction === 'incoming' ? 'user' : 'assistant',
     content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
   }));

@@ -69,7 +69,7 @@ const env = {
 };
 
 // Startup validation for critical variables
-const required = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY', 'JWT_SECRET'];
+const required = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY', 'JWT_SECRET', 'OPENAI_API_KEY'];
 const missing = required.filter((key) => !process.env[key]);
 if (missing.length > 0) {
   console.error(`FATAL: Missing required environment variables: ${missing.join(', ')}`);
@@ -80,6 +80,20 @@ if (missing.length > 0) {
 if (process.env.JWT_SECRET === 'dev-secret' && env.nodeEnv === 'production') {
   console.error('FATAL: JWT_SECRET must be changed from default in production.');
   process.exit(1);
+}
+
+// Production-only required vars
+if (env.nodeEnv === 'production') {
+  const productionRequired = ['ENCRYPTION_KEY', 'EVOLUTION_API_KEY', 'SMTP_HOST', 'SMTP_USER', 'SMTP_PASS', 'REDIS_PASSWORD'];
+  const productionMissing = productionRequired.filter((key) => !process.env[key]);
+  if (productionMissing.length > 0) {
+    console.error(`FATAL: Missing production-required environment variables: ${productionMissing.join(', ')}`);
+    process.exit(1);
+  }
+}
+
+if (!process.env.ENCRYPTION_KEY && env.nodeEnv !== 'production') {
+  console.warn('WARNING: ENCRYPTION_KEY not set. Using fallback is insecure. Set ENCRYPTION_KEY for proper encryption.');
 }
 
 module.exports = env;

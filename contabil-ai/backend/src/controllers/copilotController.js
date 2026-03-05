@@ -1,6 +1,7 @@
 const copilotEngine = require('../copilot/copilotEngine');
 const { addCopilotJob } = require('../queues');
 const logger = require('../config/logger');
+const supabase = require('../config/supabase');
 
 async function getSessions(req, res) {
   try {
@@ -45,6 +46,11 @@ async function triggerEvaluation(req, res) {
       return res.status(400).json({ error: 'company_id obrigatorio' });
     }
 
+    const { data: company } = await supabase.from('companies').select('office_id').eq('id', company_id).single();
+    if (!company || company.office_id !== req.user.office_id) {
+      return res.status(403).json({ error: 'Sem permissao para acessar esta empresa' });
+    }
+
     const job = await addCopilotJob(company_id, 'manual');
     res.json({ jobId: job.id, message: 'Avaliacao do copilot enfileirada' });
   } catch (err) {
@@ -58,6 +64,11 @@ async function askCopilot(req, res) {
     const { company_id, question } = req.body;
     if (!company_id || !question) {
       return res.status(400).json({ error: 'company_id e question sao obrigatorios' });
+    }
+
+    const { data: company } = await supabase.from('companies').select('office_id').eq('id', company_id).single();
+    if (!company || company.office_id !== req.user.office_id) {
+      return res.status(403).json({ error: 'Sem permissao para acessar esta empresa' });
     }
 
     const answer = await copilotEngine.answerFinancialQuery(company_id, question);

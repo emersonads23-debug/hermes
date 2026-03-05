@@ -55,8 +55,12 @@ class BaseAgent {
 
   // Emit a follow-up event to the orchestrator
   async emit(eventType, data) {
-    const { addAgentEvent } = require('../queues');
-    return addAgentEvent(eventType, data);
+    try {
+      const { addAgentEvent } = require('../queues');
+      return addAgentEvent(eventType, data);
+    } catch (err) {
+      this.logger.error(`[${this.name}] Failed to emit event`, { eventType, error: err.message });
+    }
   }
 }
 

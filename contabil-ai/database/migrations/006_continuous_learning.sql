@@ -34,3 +34,15 @@ CREATE POLICY "service_role_memory_metrics" ON memory_metrics
   FOR ALL
   USING (auth.role() = 'service_role')
   WITH CHECK (auth.role() = 'service_role');
+
+-- RPC function for atomic memory usage increment
+CREATE OR REPLACE FUNCTION increment_memory_usage(memory_id UUID)
+RETURNS VOID AS $$
+BEGIN
+  UPDATE ai_memories
+  SET usage_count = usage_count + 1,
+      last_used_at = NOW(),
+      updated_at = NOW()
+  WHERE id = memory_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;

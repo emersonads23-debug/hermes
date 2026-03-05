@@ -4,12 +4,23 @@ const env = require('../config/env');
 const logger = require('../config/logger');
 const n8nService = require('./n8nService');
 
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 const transporter = nodemailer.createTransport({
   host: env.smtp.host,
   port: env.smtp.port,
   secure: env.smtp.port === 465,
   auth: { user: env.smtp.user, pass: env.smtp.pass },
 });
+
+if (env.smtp.host) {
+  transporter.verify().catch((err) => {
+    logger.warn('SMTP connection verification failed', { error: err.message });
+  });
+}
 
 async function createEscalation({ officeId, companyId, userPhone, subject, description, filePath }) {
   const { data: task, error } = await supabase
@@ -66,12 +77,12 @@ async function sendEscalationEmail(task) {
     subject: `[ContabilAI] Escalacao: ${task.subject}`,
     html: `
       <h2>Nova escalacao - ContabilAI</h2>
-      <p><strong>Escritorio:</strong> ${office?.name || 'N/A'}</p>
-      <p><strong>Telefone do cliente:</strong> ${task.user_phone}</p>
-      <p><strong>Assunto:</strong> ${task.subject}</p>
+      <p><strong>Escritorio:</strong> ${escapeHtml(office?.name) || 'N/A'}</p>
+      <p><strong>Telefone do cliente:</strong> ${escapeHtml(task.user_phone)}</p>
+      <p><strong>Assunto:</strong> ${escapeHtml(task.subject)}</p>
       <p><strong>Descricao:</strong></p>
-      <p>${task.description}</p>
-      <p><strong>ID da tarefa:</strong> ${task.id}</p>
+      <p>${escapeHtml(task.description)}</p>
+      <p><strong>ID da tarefa:</strong> ${escapeHtml(String(task.id))}</p>
       <hr>
       <p>Acesse o painel para mais detalhes.</p>
     `,

@@ -6,7 +6,7 @@ const router = Router();
 
 router.use(authenticate);
 
-router.get('/', escalationController.list);
+router.get('/', authorize('superadmin', 'office_admin', 'accountant'), escalationController.list);
 router.put('/:id', authorize('superadmin', 'office_admin', 'accountant'), escalationController.update);
 
 module.exports = router;

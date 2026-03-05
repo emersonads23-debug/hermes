@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const env = require('../config/env');
 const supabase = require('../config/supabase');
+const logger = require('../config/logger');
 
 async function authenticate(req, res, next) {
   const header = req.headers.authorization;
@@ -24,13 +25,17 @@ async function authenticate(req, res, next) {
 
     req.user = user;
     next();
-  } catch {
+  } catch (err) {
+    logger.warn('Auth verification failed', { error: err.message });
     return res.status(401).json({ error: 'Token invalido' });
   }
 }
 
 function authorize(...roles) {
   return (req, res, next) => {
+    if (!req.user?.role) {
+      return res.status(403).json({ error: 'Sem permissao' });
+    }
     if (!roles.includes(req.user.role)) {
       return res.status(403).json({ error: 'Sem permissao' });
     }

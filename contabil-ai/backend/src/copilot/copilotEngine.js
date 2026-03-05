@@ -207,7 +207,26 @@ ${context.memoryContext || ''}`;
     response_format: { type: 'json_object' },
   });
 
-  return JSON.parse(response.choices[0].message.content);
+  try {
+    return JSON.parse(response?.choices?.[0]?.message?.content || '{}');
+  } catch (parseErr) {
+    logger.error('Failed to parse copilot reasoning response', { companyId, error: parseErr.message });
+    return { summary: 'Falha ao processar analise.', recommendations: [], alerts: [] };
+  }
+}
+
+// ============================================================
+// Input Sanitization
+// ============================================================
+
+function sanitizeInput(input) {
+  if (!input) return '';
+  return String(input)
+    .replace(/```/g, '')
+    .replace(/system:/gi, '')
+    .replace(/ignore previous/gi, '')
+    .replace(/forget all/gi, '')
+    .substring(0, 500);
 }
 
 // ============================================================
@@ -221,6 +240,7 @@ Inclua valores em BRL quando relevante.
 Se nao houver dados suficientes, informe com clareza.`;
 
 async function answerFinancialQuery(companyId, question) {
+  const safeQuestion = sanitizeInput(question);
   const context = await financialMemory.getCompanyFinancialContext(companyId);
 
   if (!context.latestSnapshot) {
@@ -228,7 +248,7 @@ async function answerFinancialQuery(companyId, question) {
   }
 
   const s = context.latestSnapshot;
-  const prompt = `Pergunta: ${question}
+  const prompt = `Pergunta: ${safeQuestion}
 
 Dados financeiros atuais:
 - Receita: R$ ${Number(s.total_revenue || 0).toFixed(2)}
@@ -240,17 +260,22 @@ Dados financeiros atuais:
 ${context.activePatterns.length > 0 ? `Padroes: ${context.activePatterns.map((p) => p.description).join('; ')}` : ''}
 ${context.recentInsights.length > 0 ? `Alertas recentes: ${context.recentInsights.slice(0, 3).map((i) => i.title).join('; ')}` : ''}`;
 
-  const response = await openai.chat.completions.create({
-    model: 'gpt-4o',
-    messages: [
-      { role: 'system', content: COPILOT_QUERY_PROMPT },
-      { role: 'user', content: prompt },
-    ],
-    temperature: 0.3,
-    max_tokens: 300,
-  });
+  try {
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: COPILOT_QUERY_PROMPT },
+        { role: 'user', content: prompt },
+      ],
+      temperature: 0.3,
+      max_tokens: 300,
+    });
 
-  return response.choices[0].message.content;
+    return response?.choices?.[0]?.message?.content || 'Nao foi possivel gerar uma resposta no momento.';
+  } catch (err) {
+    logger.error('Failed to answer financial query', { companyId, error: err.message });
+    return 'Desculpe, ocorreu um erro ao processar sua consulta financeira. Tente novamente em alguns instantes.';
+  }
 }
 
 // ============================================================

@@ -1,13 +1,20 @@
 const crypto = require('crypto');
 const env = require('../config/env');
+const logger = require('../config/logger');
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 16;
 const TAG_LENGTH = 16;
 
 function getEncryptionKey() {
-  const secret = process.env.ENCRYPTION_KEY || env.jwt.secret;
-  return crypto.createHash('sha256').update(secret).digest();
+  if (process.env.ENCRYPTION_KEY) {
+    return crypto.createHash('sha256').update(process.env.ENCRYPTION_KEY).digest();
+  }
+  if (env.nodeEnv === 'production') {
+    throw new Error('ENCRYPTION_KEY is required in production. Do not fall back to JWT secret.');
+  }
+  logger.warn('ENCRYPTION_KEY not set, falling back to JWT secret. This is insecure and only allowed in development.');
+  return crypto.createHash('sha256').update(env.jwt.secret).digest();
 }
 
 function encrypt(plaintext) {

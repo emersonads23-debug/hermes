@@ -9,7 +9,7 @@ async function list(req, res) {
       taskType: task_type,
       assignedTo: assigned_to,
       companyId: company_id,
-      limit: parseInt(limit, 10) || 50,
+      limit: Math.min(parseInt(limit, 10) || 50, 200),
       offset: parseInt(offset, 10) || 0,
     });
     res.json(result);

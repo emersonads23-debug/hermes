@@ -41,7 +41,13 @@ async function classifyDocument(filePath, mimeType) {
   } else if (ext === '.pdf') {
     content = await classifyFromPdf(filePath);
   } else {
-    const text = fs.readFileSync(filePath, 'utf8');
+    let text;
+    try {
+      text = fs.readFileSync(filePath, 'utf8');
+    } catch (fsErr) {
+      logger.error('Failed to read text file', { filePath, error: fsErr.message });
+      throw new Error(`Cannot read text file: ${fsErr.message}`);
+    }
     content = await classifyFromText(text);
   }
 
@@ -49,7 +55,13 @@ async function classifyDocument(filePath, mimeType) {
 }
 
 async function classifyFromImage(filePath, mimeType) {
-  const imageBuffer = fs.readFileSync(filePath);
+  let imageBuffer;
+  try {
+    imageBuffer = fs.readFileSync(filePath);
+  } catch (fsErr) {
+    logger.error('Failed to read image file', { filePath, error: fsErr.message });
+    throw new Error(`Cannot read image file: ${fsErr.message}`);
+  }
   const base64 = imageBuffer.toString('base64');
   const mime = mimeType || (filePath.endsWith('.png') ? 'image/png' : 'image/jpeg');
 
@@ -70,12 +82,23 @@ async function classifyFromImage(filePath, mimeType) {
     response_format: { type: 'json_object' },
   });
 
-  return JSON.parse(response.choices[0].message.content);
+  try {
+    return JSON.parse(response?.choices?.[0]?.message?.content || '{}');
+  } catch (parseErr) {
+    logger.error('Failed to parse AI response', { error: parseErr.message });
+    return { classification: 'unknown', confidence: 0, extracted_fields: {} };
+  }
 }
 
 async function classifyFromPdf(filePath) {
   const pdfParse = require('pdf-parse');
-  const buffer = fs.readFileSync(filePath);
+  let buffer;
+  try {
+    buffer = fs.readFileSync(filePath);
+  } catch (fsErr) {
+    logger.error('Failed to read PDF file', { filePath, error: fsErr.message });
+    throw new Error(`Cannot read PDF file: ${fsErr.message}`);
+  }
   const pdf = await pdfParse(buffer);
 
   return classifyFromText(pdf.text);
@@ -95,7 +118,12 @@ async function classifyFromText(text) {
     response_format: { type: 'json_object' },
   });
 
-  return JSON.parse(response.choices[0].message.content);
+  try {
+    return JSON.parse(response?.choices?.[0]?.message?.content || '{}');
+  } catch (parseErr) {
+    logger.error('Failed to parse AI response', { error: parseErr.message });
+    return { classification: 'unknown', confidence: 0, extracted_fields: {} };
+  }
 }
 
 async function processDocument(documentId) {

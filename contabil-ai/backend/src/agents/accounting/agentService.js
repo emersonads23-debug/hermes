@@ -39,7 +39,7 @@ async function suggestAccountingEntry(companyId, { supplier, amount, category, a
     try {
       const memoryEngine = require('../../memory/memoryEngine');
       memoryContext = await memoryEngine.getMemoryContext(companyId);
-    } catch { /* no memory available */ }
+    } catch (err) { logger.warn('Memory context unavailable', { error: err.message }); }
 
     const prompt = `Transacao:
 - Fornecedor: ${supplier || 'N/A'}
@@ -62,7 +62,22 @@ Sugira o lancamento contabil.`;
       response_format: { type: 'json_object' },
     });
 
-    const entry = JSON.parse(response.choices[0].message.content);
+    let entry;
+    try {
+      entry = JSON.parse(response?.choices?.[0]?.message?.content || '{}');
+    } catch (parseErr) {
+      logger.error('Failed to parse accounting AI response', { companyId, error: parseErr.message });
+      return {
+        companyId,
+        debit_account: null,
+        credit_account: null,
+        amount: Math.abs(amount || 0),
+        description: `${supplier || ''} - ${category || ''}`,
+        category,
+        confidence: 0,
+        source: 'fallback',
+      };
+    }
     return { companyId, ...entry, source: 'ai' };
   } catch (err) {
     logger.error('Accounting entry suggestion failed', { companyId, error: err.message });

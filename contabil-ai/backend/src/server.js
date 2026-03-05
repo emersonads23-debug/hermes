@@ -40,7 +40,10 @@ app.use(requestTracing);
 app.use('/api/', globalLimiter);
 
 // Webhook route with larger body limit and higher rate limit
-app.use('/api/webhook', webhookLimiter, express.json({ limit: '50mb' }), webhookRoutes);
+app.use('/api/webhook', webhookLimiter, express.json({
+  limit: '50mb',
+  verify: (req, _res, buf) => { req.rawBody = buf.toString(); }
+}), webhookRoutes);
 
 // Body parsing
 app.use(express.json({ limit: '10mb' }));

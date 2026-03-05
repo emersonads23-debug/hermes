@@ -145,20 +145,6 @@ async function recordUsage(id) {
     .eq('id', id);
 }
 
-async function findActiveMemories(companyId, { minConfidence = 0, limit = 100 } = {}) {
-  const { data, error } = await supabase
-    .from('ai_memories')
-    .select('*')
-    .eq('company_id', companyId)
-    .eq('status', 'active')
-    .gte('confidence', minConfidence)
-    .order('updated_at', { ascending: false })
-    .limit(limit);
-
-  if (error) throw error;
-  return data || [];
-}
-
 async function getMemoryStats(companyId) {
   const { data, error } = await supabase
     .from('ai_memories')
@@ -196,6 +182,5 @@ module.exports = {
   searchMemories,
   deleteMemory,
   recordUsage,
-  findActiveMemories,
   getMemoryStats,
 };

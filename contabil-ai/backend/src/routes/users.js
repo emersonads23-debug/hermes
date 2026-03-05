@@ -24,8 +24,8 @@ const updateSchema = z.object({
 
 router.use(authenticate);
 
-router.get('/', userController.list);
-router.get('/:id', userController.getById);
+router.get('/', authorize('superadmin', 'office_admin'), userController.list);
+router.get('/:id', authorize('superadmin', 'office_admin'), userController.getById);
 router.post('/', authorize('superadmin', 'office_admin'), validate(createSchema), userController.create);
 router.put('/:id', authorize('superadmin', 'office_admin'), validate(updateSchema), userController.update);
 router.delete('/:id', authorize('superadmin', 'office_admin'), userController.remove);

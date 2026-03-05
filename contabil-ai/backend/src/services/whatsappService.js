@@ -14,7 +14,14 @@ const api = axios.create({
 // --- Webhook Signature Validation ---
 
 function validateWebhookSignature(rawBody, signature) {
-  if (!env.evolution.webhookSecret) return true; // skip if not configured
+  if (!env.evolution.webhookSecret) {
+    if (env.nodeEnv === 'production') {
+      logger.error('Webhook secret not configured in production. Rejecting request.');
+      return false;
+    }
+    logger.warn('Webhook secret not configured. Skipping signature validation in development.');
+    return true;
+  }
   if (!signature) return false;
 
   const expected = crypto

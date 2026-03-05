@@ -1,4 +1,4 @@
-const { Queue, Worker, QueueEvents } = require('bullmq');
+const { Queue, Worker } = require('bullmq');
 const logger = require('../config/logger');
 
 const REDIS_CONFIG = {
@@ -6,6 +6,8 @@ const REDIS_CONFIG = {
   port: parseInt(process.env.REDIS_PORT, 10) || 6379,
   password: process.env.REDIS_PASSWORD || undefined,
   maxRetriesPerRequest: null,
+  retryStrategy: (times) => Math.min(times * 200, 5000),
+  enableReadyCheck: true,
 };
 
 // Queue definitions
