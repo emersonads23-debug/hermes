@@ -90,6 +90,20 @@ app.get('/api/health', async (_req, res) => {
   });
 });
 
+// Queue stats endpoint
+app.get('/api/queues/stats', async (_req, res) => {
+  if (!process.env.REDIS_HOST && !process.env.REDIS_URL) {
+    return res.json({ configured: false });
+  }
+  try {
+    const { getQueueStats } = require('./queues');
+    const stats = await getQueueStats();
+    res.json({ configured: true, queues: stats });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Serve frontend in production
 if (env.nodeEnv === 'production') {
   app.use(express.static(path.join(__dirname, '../../frontend/dist')));

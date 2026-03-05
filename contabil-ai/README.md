@@ -152,6 +152,12 @@ PUT  /api/tasks/:id
 POST /api/tasks/:id/assign  { user_id }
 ```
 
+### Sistema
+```
+GET  /api/health             # Health check de todos os servicos
+GET  /api/queues/stats       # Estatisticas das filas BullMQ
+```
+
 ### Integracoes
 ```
 GET  /api/integrations
@@ -194,6 +200,7 @@ contabil-ai/
 │       ├── middleware/       # Auth, Rate Limiting, Validation
 │       ├── ocr/             # Document Intelligence
 │       ├── queues/          # Redis + BullMQ workers
+│       ├── tasks/           # Human Task Engine (taskManager)
 │       ├── routes/          # Express routes
 │       ├── scripts/         # CLI tools (migrate, seed, cron)
 │       ├── services/        # Business logic
@@ -224,4 +231,14 @@ contabil-ai/
 - **Graceful Shutdown**: fecha conexoes e workers ao encerrar
 - **Logs estruturados**: request tracing com Winston
 
-Suporta 1000+ empresas e 10000+ usuarios.
+Projetado para suportar:
+- 1000+ escritorios de contabilidade
+- 10000+ empresas clientes
+- 100000+ usuarios
+
+### Escalabilidade Horizontal
+- Backend stateless (JWT auth, sem sessoes em memoria)
+- Redis como broker de filas (pode ser Redis Cluster)
+- Supabase PostgreSQL com connection pooling
+- Workers BullMQ podem rodar em processos separados
+- Docker Compose pronto para orquestracao (Kubernetes-ready)

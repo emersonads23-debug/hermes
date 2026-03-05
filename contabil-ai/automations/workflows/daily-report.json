@@ -1,31 +1,31 @@
 {
-  "name": "ContabilAI - Daily Report",
+  "name": "ContabilAI - Daily Report & Financial Analysis",
   "nodes": [
     {
       "parameters": {
         "rule": {
           "interval": [
             {
-              "triggerAtHour": 8,
+              "triggerAtHour": 6,
               "triggerAtMinute": 0
             }
           ]
         }
       },
-      "name": "Daily Trigger 8AM",
+      "name": "Daily Trigger 6AM",
       "type": "n8n-nodes-base.scheduleTrigger",
       "position": [250, 300],
       "typeVersion": 1
     },
     {
       "parameters": {
-        "url": "={{ $env.BACKEND_API_URL }}/api/escalations?status=open",
+        "url": "={{ $env.BACKEND_API_URL }}/api/health",
         "method": "GET",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "options": {}
+        "options": {
+          "timeout": 10000
+        }
       },
-      "name": "Get Open Escalations",
+      "name": "Health Check",
       "type": "n8n-nodes-base.httpRequest",
       "position": [450, 300],
       "typeVersion": 3
@@ -33,49 +33,126 @@
     {
       "parameters": {
         "conditions": {
-          "number": [
+          "string": [
             {
-              "value1": "={{ $json.tasks?.length || 0 }}",
-              "operation": "larger",
-              "value2": 0
+              "value1": "={{ $json.status }}",
+              "value2": "healthy",
+              "operation": "equals"
             }
           ]
         }
       },
-      "name": "Has Open Tasks?",
+      "name": "System Healthy?",
       "type": "n8n-nodes-base.if",
       "position": [650, 300],
       "typeVersion": 1
     },
     {
       "parameters": {
+        "command": "cd /app && node src/scripts/daily-cron.js"
+      },
+      "name": "Run Financial Analysis",
+      "type": "n8n-nodes-base.executeCommand",
+      "position": [850, 250],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.BACKEND_API_URL }}/api/escalations?status=open",
+        "method": "GET",
+        "options": {}
+      },
+      "name": "Get Open Escalations",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1050, 250],
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.BACKEND_API_URL }}/api/tasks?status=pending",
+        "method": "GET",
+        "options": {}
+      },
+      "name": "Get Pending Tasks",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1050, 400],
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "mergeByPosition": "multiplesOfN"
+      },
+      "name": "Merge Data",
+      "type": "n8n-nodes-base.merge",
+      "position": [1250, 300],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
         "fromEmail": "={{ $env.SMTP_FROM }}",
         "toEmail": "={{ $env.ESCALATION_EMAIL }}",
-        "subject": "[ContabilAI] Relatorio diario - {{ $json.tasks.length }} escalacoes abertas",
-        "text": "Relatorio diario ContabilAI\n\nTotal de escalacoes abertas: {{ $json.tasks.length }}\n\nAcesse o painel para visualizar os detalhes.",
+        "subject": "[ContabilAI] Relatorio diario - {{ new Date().toLocaleDateString('pt-BR') }}",
+        "text": "Relatorio diario ContabilAI\n\nAnalise financeira concluida.\n\nEscalacoes abertas: {{ $json.tasks?.length || 0 }}\nTarefas pendentes: {{ $json.total || 0 }}\n\nAcesse o painel para detalhes.",
         "options": {}
       },
       "name": "Send Daily Report",
       "type": "n8n-nodes-base.emailSend",
-      "position": [850, 250],
+      "position": [1450, 300],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $env.SMTP_FROM }}",
+        "toEmail": "={{ $env.ESCALATION_EMAIL }}",
+        "subject": "[ContabilAI] ALERTA: Sistema com problemas",
+        "text": "O sistema ContabilAI nao esta saudavel.\n\nStatus: {{ $json.status }}\nServicos: {{ JSON.stringify($json.services, null, 2) }}\n\nVerifique os servicos imediatamente.",
+        "options": {}
+      },
+      "name": "Alert System Down",
+      "type": "n8n-nodes-base.emailSend",
+      "position": [850, 400],
       "typeVersion": 1
     }
   ],
   "connections": {
-    "Daily Trigger 8AM": {
+    "Daily Trigger 6AM": {
       "main": [
-        [{ "node": "Get Open Escalations", "type": "main", "index": 0 }]
+        [{ "node": "Health Check", "type": "main", "index": 0 }]
+      ]
+    },
+    "Health Check": {
+      "main": [
+        [{ "node": "System Healthy?", "type": "main", "index": 0 }]
+      ]
+    },
+    "System Healthy?": {
+      "main": [
+        [{ "node": "Run Financial Analysis", "type": "main", "index": 0 }],
+        [{ "node": "Alert System Down", "type": "main", "index": 0 }]
+      ]
+    },
+    "Run Financial Analysis": {
+      "main": [
+        [
+          { "node": "Get Open Escalations", "type": "main", "index": 0 },
+          { "node": "Get Pending Tasks", "type": "main", "index": 0 }
+        ]
       ]
     },
     "Get Open Escalations": {
       "main": [
-        [{ "node": "Has Open Tasks?", "type": "main", "index": 0 }]
+        [{ "node": "Merge Data", "type": "main", "index": 0 }]
       ]
     },
-    "Has Open Tasks?": {
+    "Get Pending Tasks": {
       "main": [
-        [{ "node": "Send Daily Report", "type": "main", "index": 0 }],
-        []
+        [{ "node": "Merge Data", "type": "main", "index": 1 }]
+      ]
+    },
+    "Merge Data": {
+      "main": [
+        [{ "node": "Send Daily Report", "type": "main", "index": 0 }]
       ]
     }
   },
