@@ -1,11 +1,48 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
+const NAV_SECTIONS = [
+  {
+    label: 'Geral',
+    items: [
+      { to: '/', label: 'Dashboard', end: true },
+    ],
+  },
+  {
+    label: 'Onboarding',
+    roles: ['superadmin', 'office_admin'],
+    items: [
+      { to: '/offices', label: 'Escritorios', roles: ['superadmin'] },
+      { to: '/companies', label: 'Empresas' },
+      { to: '/users', label: 'Usuarios' },
+    ],
+  },
+  {
+    label: 'Integracoes',
+    roles: ['superadmin', 'office_admin'],
+    items: [
+      { to: '/whatsapp', label: 'WhatsApp' },
+      { to: '/erp', label: 'ERP' },
+      { to: '/integrations', label: 'OAuth' },
+    ],
+  },
+  {
+    label: 'Operacional',
+    items: [
+      { to: '/financial', label: 'Financeiro' },
+      { to: '/tasks', label: 'Tarefas' },
+      { to: '/copilot', label: 'Copilot' },
+      { to: '/escalations', label: 'Escalacoes' },
+    ],
+  },
+];
+
 export default function Layout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  function handleLogout() {
+  function handleLogout(e) {
+    e.preventDefault();
     logout();
     navigate('/login');
   }
@@ -15,37 +52,26 @@ export default function Layout() {
       <aside className="sidebar">
         <div className="sidebar-logo">ContabilAI</div>
         <nav className="sidebar-nav">
-          <NavLink to="/" end>
-            <span>Dashboard</span>
-          </NavLink>
-          {(user.role === 'superadmin') && (
-            <NavLink to="/offices">
-              <span>Escritorios</span>
-            </NavLink>
-          )}
-          <NavLink to="/companies">
-            <span>Empresas</span>
-          </NavLink>
-          <NavLink to="/users">
-            <span>Usuarios</span>
-          </NavLink>
-          <NavLink to="/financial">
-            <span>Financeiro</span>
-          </NavLink>
-          <NavLink to="/tasks">
-            <span>Tarefas</span>
-          </NavLink>
-          <NavLink to="/copilot">
-            <span>Copilot</span>
-          </NavLink>
-          <NavLink to="/escalations">
-            <span>Escalacoes</span>
-          </NavLink>
-          {['superadmin', 'office_admin'].includes(user.role) && (
-            <NavLink to="/integrations">
-              <span>Integracoes</span>
-            </NavLink>
-          )}
+          {NAV_SECTIONS.map((section) => {
+            if (section.roles && !section.roles.includes(user.role)) return null;
+
+            const visibleItems = section.items.filter(
+              (item) => !item.roles || item.roles.includes(user.role)
+            );
+            if (visibleItems.length === 0) return null;
+
+            return (
+              <div key={section.label}>
+                <div className="sidebar-section">{section.label}</div>
+                {visibleItems.map((item) => (
+                  <NavLink key={item.to} to={item.to} end={item.end}>
+                    <span>{item.label}</span>
+                  </NavLink>
+                ))}
+              </div>
+            );
+          })}
+          <div className="sidebar-section" style={{ marginTop: 'auto' }}></div>
           <a href="#" onClick={handleLogout}>
             <span>Sair</span>
           </a>

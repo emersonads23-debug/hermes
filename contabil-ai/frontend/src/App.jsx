@@ -11,6 +11,8 @@ import Integrations from './pages/Integrations';
 import FinancialDashboard from './pages/FinancialDashboard';
 import Tasks from './pages/Tasks';
 import Copilot from './pages/Copilot';
+import WhatsAppInstances from './pages/WhatsAppInstances';
+import ErpIntegrations from './pages/ErpIntegrations';
 
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
@@ -32,6 +34,8 @@ export default function App() {
         <Route path="tasks" element={<Tasks />} />
         <Route path="copilot" element={<Copilot />} />
         <Route path="integrations" element={<Integrations />} />
+        <Route path="whatsapp" element={<WhatsAppInstances />} />
+        <Route path="erp" element={<ErpIntegrations />} />
       </Route>
     </Routes>
   );

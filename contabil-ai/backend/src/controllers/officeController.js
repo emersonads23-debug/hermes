@@ -1,5 +1,6 @@
 const bcrypt = require('bcryptjs');
 const supabase = require('../config/supabase');
+const logger = require('../config/logger');
 
 async function list(req, res) {
   const { data, error } = await supabase
@@ -23,11 +24,19 @@ async function getById(req, res) {
 }
 
 async function create(req, res) {
-  const { name, cnpj, email, phone, adminName, adminEmail, adminPassword } = req.validated;
+  const { name, cnpj, email, phone, adminName, adminEmail, adminPassword, plan, max_companies, logo, adminPhone } = req.validated;
 
   const { data: office, error: officeErr } = await supabase
     .from('offices')
-    .insert({ name, cnpj, email, phone })
+    .insert({
+      name,
+      cnpj,
+      email,
+      phone,
+      plan: plan || 'basic',
+      max_companies: max_companies || 10,
+      logo: logo || null,
+    })
     .select()
     .single();
 
@@ -40,9 +49,19 @@ async function create(req, res) {
     email: adminEmail,
     password_hash: hash,
     role: 'office_admin',
+    phone: adminPhone || null,
   });
 
   if (userErr) return res.status(400).json({ error: userErr.message });
+
+  // Auto-create WhatsApp instance for office
+  try {
+    const whatsappService = require('../services/whatsappService');
+    await whatsappService.createInstance();
+    logger.info('WhatsApp instance created for office', { officeId: office.id });
+  } catch (err) {
+    logger.warn('Failed to create WhatsApp instance for office', { officeId: office.id, error: err.message });
+  }
 
   res.status(201).json({ office });
 }

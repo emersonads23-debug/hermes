@@ -12,6 +12,10 @@ const createSchema = z.object({
   email: z.string().email().optional(),
   phone: z.string().optional(),
   office_id: z.string().uuid().optional(),
+  erp_type: z.enum(['conta_azul', 'omie']).optional(),
+  erp_token: z.string().optional(),
+  erp_refresh_token: z.string().optional(),
+  whatsapp_phone: z.string().optional(),
 });
 
 const updateSchema = z.object({
@@ -19,6 +23,10 @@ const updateSchema = z.object({
   cnpj: z.string().min(14).max(18).optional(),
   email: z.string().email().optional(),
   phone: z.string().optional(),
+  erp_type: z.enum(['conta_azul', 'omie']).optional(),
+  erp_token: z.string().optional(),
+  erp_refresh_token: z.string().optional(),
+  whatsapp_phone: z.string().optional(),
 });
 
 router.use(authenticate);

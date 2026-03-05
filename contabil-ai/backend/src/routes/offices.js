@@ -14,6 +14,10 @@ const createSchema = z.object({
   adminName: z.string().min(2),
   adminEmail: z.string().email(),
   adminPassword: z.string().min(8),
+  adminPhone: z.string().optional(),
+  plan: z.enum(['basic', 'professional', 'enterprise']).optional(),
+  max_companies: z.number().int().min(1).max(1000).optional(),
+  logo: z.string().url().optional(),
 });
 
 const updateSchema = z.object({
@@ -21,6 +25,9 @@ const updateSchema = z.object({
   cnpj: z.string().min(14).max(18).optional(),
   email: z.string().email().optional(),
   phone: z.string().optional(),
+  plan: z.enum(['basic', 'professional', 'enterprise']).optional(),
+  max_companies: z.number().int().min(1).max(1000).optional(),
+  logo: z.string().url().optional(),
 });
 
 router.use(authenticate);

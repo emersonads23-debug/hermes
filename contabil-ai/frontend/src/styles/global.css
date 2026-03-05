@@ -83,6 +83,15 @@ body {
   border-left: 3px solid var(--sidebar-active);
 }
 
+.sidebar-section {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgba(255,255,255,0.35);
+  padding: 1rem 1.5rem 0.25rem;
+}
+
 .main-content {
   margin-left: 250px;
   flex: 1;
