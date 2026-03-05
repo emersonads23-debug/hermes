@@ -1,4 +1,4 @@
-const openai = require('../../config/openai');
+const getOpenAI = require('../../config/openai');
 const logger = require('../../config/logger');
 
 const ACCOUNTING_PROMPT = `Voce e um contador brasileiro especialista em lancamentos contabeis.
@@ -51,7 +51,7 @@ ${memoryContext ? `\n${memoryContext}` : ''}
 
 Sugira o lancamento contabil.`;
 
-    const response = await openai.chat.completions.create({
+    const response = await getOpenAI().chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: ACCOUNTING_PROMPT },

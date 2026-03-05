@@ -1,4 +1,4 @@
-const openai = require('../config/openai');
+const getOpenAI = require('../config/openai');
 const supabase = require('../config/supabase');
 const logger = require('../config/logger');
 
@@ -112,7 +112,7 @@ async function runAnalysis(companyId, prompt) {
       ? `${prompt}\n\n${memoryContext}`
       : prompt;
 
-    const response = await openai.chat.completions.create({
+    const response = await getOpenAI().chat.completions.create({
       model: 'gpt-4o',
       messages: [
         { role: 'system', content: FINANCIAL_SYSTEM_PROMPT },

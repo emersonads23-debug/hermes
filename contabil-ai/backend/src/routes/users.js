@@ -22,13 +22,15 @@ const updateSchema = z.object({
   active: z.boolean().optional(),
 });
 
+const { asyncHandler } = require('../middleware/errorHandler');
+
 router.use(authenticate);
 
-router.get('/', userController.list);
-router.get('/:id', userController.getById);
-router.post('/', authorize('superadmin', 'office_admin'), validate(createSchema), userController.create);
-router.put('/:id', authorize('superadmin', 'office_admin'), validate(updateSchema), userController.update);
-router.delete('/:id', authorize('superadmin', 'office_admin'), userController.remove);
-router.put('/:userId/companies', authorize('superadmin', 'office_admin'), userController.assignCompanies);
+router.get('/', asyncHandler(userController.list));
+router.get('/:id', asyncHandler(userController.getById));
+router.post('/', authorize('superadmin', 'office_admin'), validate(createSchema), asyncHandler(userController.create));
+router.put('/:id', authorize('superadmin', 'office_admin'), validate(updateSchema), asyncHandler(userController.update));
+router.delete('/:id', authorize('superadmin', 'office_admin'), asyncHandler(userController.remove));
+router.put('/:userId/companies', authorize('superadmin', 'office_admin'), asyncHandler(userController.assignCompanies));
 
 module.exports = router;

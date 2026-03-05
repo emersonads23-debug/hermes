@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const openai = require('../config/openai');
+const getOpenAI = require('../config/openai');
 const supabase = require('../config/supabase');
 const logger = require('../config/logger');
 
@@ -53,7 +53,7 @@ async function classifyFromImage(filePath, mimeType) {
   const base64 = imageBuffer.toString('base64');
   const mime = mimeType || (filePath.endsWith('.png') ? 'image/png' : 'image/jpeg');
 
-  const response = await openai.chat.completions.create({
+  const response = await getOpenAI().chat.completions.create({
     model: 'gpt-4o',
     messages: [
       { role: 'system', content: CLASSIFICATION_PROMPT },
@@ -84,7 +84,7 @@ async function classifyFromPdf(filePath) {
 async function classifyFromText(text) {
   const truncated = text.substring(0, 4000);
 
-  const response = await openai.chat.completions.create({
+  const response = await getOpenAI().chat.completions.create({
     model: 'gpt-4o',
     messages: [
       { role: 'system', content: CLASSIFICATION_PROMPT },

@@ -1,4 +1,4 @@
-const openai = require('../config/openai');
+const getOpenAI = require('../config/openai');
 const supabase = require('../config/supabase');
 const logger = require('../config/logger');
 const financialMemory = require('../analysis/financialMemory');
@@ -196,7 +196,7 @@ ${recentSnapshots.slice(0, 7).map((s) => `${s.snapshot_date}: Rev=${Number(s.tot
 
 ${context.memoryContext || ''}`;
 
-  const response = await openai.chat.completions.create({
+  const response = await getOpenAI().chat.completions.create({
     model: 'gpt-4o',
     messages: [
       { role: 'system', content: COPILOT_SYSTEM_PROMPT },
@@ -240,7 +240,7 @@ Dados financeiros atuais:
 ${context.activePatterns.length > 0 ? `Padroes: ${context.activePatterns.map((p) => p.description).join('; ')}` : ''}
 ${context.recentInsights.length > 0 ? `Alertas recentes: ${context.recentInsights.slice(0, 3).map((i) => i.title).join('; ')}` : ''}`;
 
-  const response = await openai.chat.completions.create({
+  const response = await getOpenAI().chat.completions.create({
     model: 'gpt-4o',
     messages: [
       { role: 'system', content: COPILOT_QUERY_PROMPT },

@@ -16,11 +16,17 @@ async function list(req, res) {
 }
 
 async function getById(req, res) {
-  const { data, error } = await supabase
+  let query = supabase
     .from('companies')
     .select('*, office:offices(name), whatsapp_contacts(*)')
-    .eq('id', req.params.id)
-    .single();
+    .eq('id', req.params.id);
+
+  // Tenant isolation: non-superadmin can only see own office's companies
+  if (req.user.role !== 'superadmin') {
+    query = query.eq('office_id', req.user.office_id);
+  }
+
+  const { data, error } = await query.single();
 
   if (error) return res.status(404).json({ error: 'Empresa nao encontrada' });
   res.json({ company: data });
@@ -42,22 +48,32 @@ async function create(req, res) {
 }
 
 async function update(req, res) {
-  const { data, error } = await supabase
+  let query = supabase
     .from('companies')
     .update(req.validated)
-    .eq('id', req.params.id)
-    .select()
-    .single();
+    .eq('id', req.params.id);
+
+  if (req.user.role !== 'superadmin') {
+    query = query.eq('office_id', req.user.office_id);
+  }
+
+  const { data, error } = await query.select().single();
 
   if (error) return res.status(400).json({ error: error.message });
   res.json({ company: data });
 }
 
 async function remove(req, res) {
-  const { error } = await supabase
+  let query = supabase
     .from('companies')
     .update({ active: false })
     .eq('id', req.params.id);
+
+  if (req.user.role !== 'superadmin') {
+    query = query.eq('office_id', req.user.office_id);
+  }
+
+  const { error } = await query;
 
   if (error) return res.status(400).json({ error: error.message });
   res.json({ message: 'Empresa desativada' });

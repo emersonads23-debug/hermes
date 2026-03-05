@@ -1,5 +1,5 @@
 const fs = require('fs');
-const openai = require('../config/openai');
+const getOpenAI = require('../config/openai');
 const logger = require('../config/logger');
 
 const SYSTEM_PROMPT = `Voce e o ContabilAI, um assistente financeiro inteligente para escritorios de contabilidade.
@@ -22,7 +22,7 @@ async function interpretMessage(text, conversationHistory = []) {
     { role: 'user', content: text },
   ];
 
-  const response = await openai.chat.completions.create({
+  const response = await getOpenAI().chat.completions.create({
     model: 'gpt-4o',
     messages,
     temperature: 0.3,
@@ -33,7 +33,7 @@ async function interpretMessage(text, conversationHistory = []) {
 }
 
 async function classifyIntent(text) {
-  const response = await openai.chat.completions.create({
+  const response = await getOpenAI().chat.completions.create({
     model: 'gpt-4o-mini',
     messages: [
       {
@@ -61,7 +61,7 @@ Responda APENAS com a categoria, sem explicacao.`,
 
 async function transcribeAudio(filePath) {
   const file = fs.createReadStream(filePath);
-  const transcription = await openai.audio.transcriptions.create({
+  const transcription = await getOpenAI().audio.transcriptions.create({
     file,
     model: 'whisper-1',
     language: 'pt',
@@ -74,7 +74,7 @@ async function analyzeImage(filePath) {
   const base64Image = imageBuffer.toString('base64');
   const mimeType = filePath.endsWith('.png') ? 'image/png' : 'image/jpeg';
 
-  const response = await openai.chat.completions.create({
+  const response = await getOpenAI().chat.completions.create({
     model: 'gpt-4o',
     messages: [
       {
@@ -98,7 +98,7 @@ async function analyzeImage(filePath) {
 }
 
 async function analyzePdf(textContent) {
-  const response = await openai.chat.completions.create({
+  const response = await getOpenAI().chat.completions.create({
     model: 'gpt-4o',
     messages: [
       {
@@ -114,7 +114,7 @@ async function analyzePdf(textContent) {
 }
 
 async function shouldEscalate(text, aiResponse) {
-  const response = await openai.chat.completions.create({
+  const response = await getOpenAI().chat.completions.create({
     model: 'gpt-4o-mini',
     messages: [
       {

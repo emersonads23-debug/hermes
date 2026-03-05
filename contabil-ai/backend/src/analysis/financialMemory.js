@@ -1,4 +1,4 @@
-const openai = require('../config/openai');
+const getOpenAI = require('../config/openai');
 const supabase = require('../config/supabase');
 const logger = require('../config/logger');
 
@@ -103,7 +103,7 @@ Retorne JSON:
 }`;
 
   try {
-    const response = await openai.chat.completions.create({
+    const response = await getOpenAI().chat.completions.create({
       model: 'gpt-4o',
       messages: [
         { role: 'system', content: 'Voce e um analista financeiro que detecta padroes em series temporais. Retorne apenas JSON valido.' },

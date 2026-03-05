@@ -6,6 +6,25 @@ if (!env.supabase.url || !env.supabase.serviceRoleKey) {
   throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required');
 }
 
+async function retryFetch(fn, { retries = 3, baseDelay = 500 } = {}) {
+  let lastError;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err;
+      if (attempt < retries) {
+        const delay = baseDelay * Math.pow(2, attempt);
+        logger.warn(`Supabase request failed (attempt ${attempt + 1}/${retries + 1}), retrying in ${delay}ms`, {
+          error: err.message,
+        });
+        await new Promise((r) => setTimeout(r, delay));
+      }
+    }
+  }
+  throw lastError;
+}
+
 const supabase = createClient(env.supabase.url, env.supabase.serviceRoleKey, {
   auth: {
     autoRefreshToken: false,
@@ -28,25 +47,6 @@ const supabasePublic = env.supabase.anonKey
       auth: { autoRefreshToken: false, persistSession: false },
     })
   : null;
-
-async function retryFetch(fn, { retries = 3, baseDelay = 500 } = {}) {
-  let lastError;
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      return await fn();
-    } catch (err) {
-      lastError = err;
-      if (attempt < retries) {
-        const delay = baseDelay * Math.pow(2, attempt);
-        logger.warn(`Supabase request failed (attempt ${attempt + 1}/${retries + 1}), retrying in ${delay}ms`, {
-          error: err.message,
-        });
-        await new Promise((r) => setTimeout(r, delay));
-      }
-    }
-  }
-  throw lastError;
-}
 
 async function healthCheck() {
   try {

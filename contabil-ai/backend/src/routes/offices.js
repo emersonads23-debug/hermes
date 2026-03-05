@@ -3,6 +3,7 @@ const { z } = require('zod');
 const officeController = require('../controllers/officeController');
 const { authenticate, authorize } = require('../middleware/auth');
 const validate = require('../middleware/validate');
+const { asyncHandler } = require('../middleware/errorHandler');
 
 const router = Router();
 
@@ -25,10 +26,10 @@ const updateSchema = z.object({
 
 router.use(authenticate);
 
-router.get('/', authorize('superadmin'), officeController.list);
-router.get('/:id', authorize('superadmin', 'office_admin'), officeController.getById);
-router.post('/', authorize('superadmin'), validate(createSchema), officeController.create);
-router.put('/:id', authorize('superadmin', 'office_admin'), validate(updateSchema), officeController.update);
-router.delete('/:id', authorize('superadmin'), officeController.remove);
+router.get('/', authorize('superadmin'), asyncHandler(officeController.list));
+router.get('/:id', authorize('superadmin', 'office_admin'), asyncHandler(officeController.getById));
+router.post('/', authorize('superadmin'), validate(createSchema), asyncHandler(officeController.create));
+router.put('/:id', authorize('superadmin', 'office_admin'), validate(updateSchema), asyncHandler(officeController.update));
+router.delete('/:id', authorize('superadmin'), asyncHandler(officeController.remove));
 
 module.exports = router;

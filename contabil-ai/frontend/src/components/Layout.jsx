@@ -46,9 +46,9 @@ export default function Layout() {
               <span>Integracoes</span>
             </NavLink>
           )}
-          <a href="#" onClick={handleLogout}>
+          <button type="button" onClick={handleLogout} style={{ all: 'unset', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1.5rem', color: 'var(--sidebar-text)', width: '100%' }}>
             <span>Sair</span>
-          </a>
+          </button>
         </nav>
       </aside>
       <main className="main-content">

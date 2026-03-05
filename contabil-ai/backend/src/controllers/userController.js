@@ -17,11 +17,16 @@ async function list(req, res) {
 }
 
 async function getById(req, res) {
-  const { data, error } = await supabase
+  let query = supabase
     .from('users')
     .select('id, name, email, role, active, office_id, created_at, office:offices(name)')
-    .eq('id', req.params.id)
-    .single();
+    .eq('id', req.params.id);
+
+  if (req.user.role !== 'superadmin') {
+    query = query.eq('office_id', req.user.office_id);
+  }
+
+  const { data, error } = await query.single();
 
   if (error) return res.status(404).json({ error: 'Usuario nao encontrado' });
   res.json({ user: data });
@@ -52,10 +57,16 @@ async function update(req, res) {
     delete updates.password;
   }
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('users')
     .update(updates)
-    .eq('id', req.params.id)
+    .eq('id', req.params.id);
+
+  if (req.user.role !== 'superadmin') {
+    query = query.eq('office_id', req.user.office_id);
+  }
+
+  const { data, error } = await query
     .select('id, name, email, role, active, office_id, created_at')
     .single();
 
@@ -64,10 +75,16 @@ async function update(req, res) {
 }
 
 async function remove(req, res) {
-  const { error } = await supabase
+  let query = supabase
     .from('users')
     .update({ active: false })
     .eq('id', req.params.id);
+
+  if (req.user.role !== 'superadmin') {
+    query = query.eq('office_id', req.user.office_id);
+  }
+
+  const { error } = await query;
 
   if (error) return res.status(400).json({ error: error.message });
   res.json({ message: 'Usuario desativado' });
