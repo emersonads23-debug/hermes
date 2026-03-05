@@ -1,0 +1,85 @@
+{
+  "name": "ContabilAI - Daily Report",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 8,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      },
+      "name": "Daily Trigger 8AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [250, 300],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.BACKEND_API_URL }}/api/escalations?status=open",
+        "method": "GET",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "name": "Get Open Escalations",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [450, 300],
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.tasks?.length || 0 }}",
+              "operation": "larger",
+              "value2": 0
+            }
+          ]
+        }
+      },
+      "name": "Has Open Tasks?",
+      "type": "n8n-nodes-base.if",
+      "position": [650, 300],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $env.SMTP_FROM }}",
+        "toEmail": "={{ $env.ESCALATION_EMAIL }}",
+        "subject": "[ContabilAI] Relatorio diario - {{ $json.tasks.length }} escalacoes abertas",
+        "text": "Relatorio diario ContabilAI\n\nTotal de escalacoes abertas: {{ $json.tasks.length }}\n\nAcesse o painel para visualizar os detalhes.",
+        "options": {}
+      },
+      "name": "Send Daily Report",
+      "type": "n8n-nodes-base.emailSend",
+      "position": [850, 250],
+      "typeVersion": 1
+    }
+  ],
+  "connections": {
+    "Daily Trigger 8AM": {
+      "main": [
+        [{ "node": "Get Open Escalations", "type": "main", "index": 0 }]
+      ]
+    },
+    "Get Open Escalations": {
+      "main": [
+        [{ "node": "Has Open Tasks?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Has Open Tasks?": {
+      "main": [
+        [{ "node": "Send Daily Report", "type": "main", "index": 0 }],
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

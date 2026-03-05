@@ -1,0 +1,60 @@
+{
+  "name": "ContabilAI - Escalation Notification",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "escalation-notify",
+        "responseMode": "lastNode"
+      },
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "position": [250, 300],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $env.SMTP_FROM }}",
+        "toEmail": "={{ $json.body.email }}",
+        "subject": "[ContabilAI] Nova escalacao: {{ $json.body.subject }}",
+        "text": "Uma nova escalacao foi criada.\n\nAssunto: {{ $json.body.subject }}\nTelefone: {{ $json.body.phone }}\nDescricao: {{ $json.body.description }}\n\nAcesse o painel para mais detalhes.",
+        "options": {}
+      },
+      "name": "Send Email",
+      "type": "n8n-nodes-base.emailSend",
+      "position": [450, 300],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "status",
+              "value": "notified"
+            }
+          ]
+        }
+      },
+      "name": "Set Response",
+      "type": "n8n-nodes-base.set",
+      "position": [650, 300],
+      "typeVersion": 1
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [{ "node": "Send Email", "type": "main", "index": 0 }]
+      ]
+    },
+    "Send Email": {
+      "main": [
+        [{ "node": "Set Response", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

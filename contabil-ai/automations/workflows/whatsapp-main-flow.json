@@ -1,0 +1,96 @@
+{
+  "name": "ContabilAI - WhatsApp Main Flow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "evolution-webhook",
+        "responseMode": "responseNode"
+      },
+      "name": "Webhook Evolution",
+      "type": "n8n-nodes-base.webhook",
+      "position": [250, 300],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.event }}",
+              "operation": "equals",
+              "value2": "messages.upsert"
+            }
+          ]
+        }
+      },
+      "name": "Is Message?",
+      "type": "n8n-nodes-base.if",
+      "position": [450, 300],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.BACKEND_API_URL }}/api/webhook/evolution",
+        "method": "POST",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "data",
+              "value": "={{ JSON.stringify($json) }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "Forward to Backend",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [650, 250],
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'ok' }) }}"
+      },
+      "name": "Respond OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [850, 250],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'ignored' }) }}"
+      },
+      "name": "Respond Ignored",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [650, 400],
+      "typeVersion": 1
+    }
+  ],
+  "connections": {
+    "Webhook Evolution": {
+      "main": [
+        [{ "node": "Is Message?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Is Message?": {
+      "main": [
+        [{ "node": "Forward to Backend", "type": "main", "index": 0 }],
+        [{ "node": "Respond Ignored", "type": "main", "index": 0 }]
+      ]
+    },
+    "Forward to Backend": {
+      "main": [
+        [{ "node": "Respond OK", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
