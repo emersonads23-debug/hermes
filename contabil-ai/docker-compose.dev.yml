@@ -8,12 +8,20 @@ services:
     container_name: contabilai-backend-dev
     restart: unless-stopped
     env_file: .env
+    environment:
+      - NODE_ENV=development
+      - EVOLUTION_API_URL=http://evolution:8080
+      - N8N_WEBHOOK_URL=http://n8n:5678/webhook
     ports:
       - "3000:3000"
     volumes:
       - ./backend/src:/app/src
       - uploads:/app/uploads
+      - logs:/app/logs
     command: npx nodemon src/server.js
+    depends_on:
+      - n8n
+      - evolution
     networks:
       - contabilai
 
@@ -25,9 +33,9 @@ services:
       - "5678:5678"
     environment:
       - N8N_BASIC_AUTH_ACTIVE=true
-      - N8N_BASIC_AUTH_USER=admin
-      - N8N_BASIC_AUTH_PASSWORD=admin
-      - WEBHOOK_URL=http://localhost:5678
+      - N8N_BASIC_AUTH_USER=${N8N_USER:-admin}
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_PASSWORD:-admin}
+      - WEBHOOK_URL=http://n8n:5678
       - GENERIC_TIMEZONE=America/Sao_Paulo
       - BACKEND_API_URL=http://backend:3000
     volumes:
@@ -42,10 +50,15 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - AUTHENTICATION_API_KEY=dev-api-key
-      - WEBHOOK_GLOBAL_URL=http://n8n:5678/webhook/evolution-webhook
+      - AUTHENTICATION_API_KEY=${EVOLUTION_API_KEY:-dev-api-key}
+      - AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES=true
+      - WEBHOOK_GLOBAL_URL=http://backend:3000/api/webhook/evolution
       - WEBHOOK_GLOBAL_ENABLED=true
       - WEBHOOK_EVENTS_MESSAGES_UPSERT=true
+      - WEBHOOK_EVENTS_CONNECTION_UPDATE=true
+      - WEBHOOK_EVENTS_QRCODE_UPDATED=true
+      - CONFIG_SESSION_PHONE_CLIENT=ContabilAI
+      - CONFIG_SESSION_PHONE_NAME=Chrome
     volumes:
       - evolution_data:/evolution/instances
     networks:
@@ -53,6 +66,7 @@ services:
 
 volumes:
   uploads:
+  logs:
   n8n_data:
   evolution_data:
 

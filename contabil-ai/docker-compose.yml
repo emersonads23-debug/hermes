@@ -64,9 +64,11 @@ services:
     environment:
       - AUTHENTICATION_API_KEY=${EVOLUTION_API_KEY}
       - AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES=true
-      - WEBHOOK_GLOBAL_URL=${N8N_WEBHOOK_URL:-http://n8n:5678}/webhook/evolution-webhook
+      - WEBHOOK_GLOBAL_URL=http://backend:3000/api/webhook/evolution
       - WEBHOOK_GLOBAL_ENABLED=true
       - WEBHOOK_EVENTS_MESSAGES_UPSERT=true
+      - WEBHOOK_EVENTS_CONNECTION_UPDATE=true
+      - WEBHOOK_EVENTS_QRCODE_UPDATED=true
       - CONFIG_SESSION_PHONE_CLIENT=ContabilAI
       - CONFIG_SESSION_PHONE_NAME=Chrome
     volumes:

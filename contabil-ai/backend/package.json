@@ -10,7 +10,9 @@
     "lint": "eslint src/",
     "migrate": "node src/scripts/migrate.js",
     "migrate:status": "node src/scripts/migrate.js --status",
-    "seed": "node src/scripts/seed.js"
+    "seed": "node src/scripts/seed.js",
+    "deploy:workflows": "node src/scripts/deploy-workflows.js",
+    "deploy:workflows:dry": "node src/scripts/deploy-workflows.js --dry-run"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",
