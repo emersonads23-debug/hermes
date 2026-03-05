@@ -93,7 +93,22 @@ async function processLidMessage(event) {
 }
 
 async function processMessage(event) {
-  const { phone, messageId, messageType, message, instance: webhookInstance } = event;
+  const { phone, messageId, messageType, message, instance: webhookInstance, lid } = event;
+
+  // Auto-save LID→phone mapping so future LID-only messages resolve automatically
+  if (lid && phone) {
+    const { data: mappedUser } = await supabase
+      .from('users')
+      .select('id, whatsapp_lid')
+      .eq('phone', phone)
+      .eq('active', true)
+      .single();
+
+    if (mappedUser && mappedUser.whatsapp_lid !== lid) {
+      await supabase.from('users').update({ whatsapp_lid: lid }).eq('id', mappedUser.id);
+      logger.info('Auto-mapped LID to user', { lid, phone, userId: mappedUser.id });
+    }
+  }
 
   const context = await resolveContext(phone, webhookInstance);
   if (!context) {

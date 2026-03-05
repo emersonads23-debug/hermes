@@ -63,7 +63,8 @@ function parseWebhookEvent(body) {
         if (message.audioMessage) messageType = 'audio';
         else if (message.imageMessage) messageType = 'image';
         else if (message.documentMessage) messageType = 'document';
-        return { type: 'message', phone, messageId, messageType, message, instance };
+        // Pass lid along so processMessage can auto-save the LID→phone mapping
+        return { type: 'message', phone, messageId, messageType, message, instance, lid };
       }
 
       // Return as lid_message with all needed info for resolution
