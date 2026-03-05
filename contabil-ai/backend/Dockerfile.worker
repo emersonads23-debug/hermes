@@ -7,7 +7,7 @@ RUN npm ci --only=production
 
 COPY src/ ./src/
 
-RUN mkdir -p logs
+RUN mkdir -p logs && chown -R node:node logs
 
 USER node
 

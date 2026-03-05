@@ -2,9 +2,11 @@ node_modules/
 dist/
 build/
 .env
-.env.*
+.env.local
+.env.*.local
 !.env.example
 *.log
+logs/
 .DS_Store
 coverage/
 .nyc_output/

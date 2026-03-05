@@ -7,7 +7,7 @@ RUN npm ci --only=production
 
 COPY src/ ./src/
 
-RUN mkdir -p uploads logs
+RUN mkdir -p uploads logs && chown -R node:node uploads logs
 
 EXPOSE 3000
 

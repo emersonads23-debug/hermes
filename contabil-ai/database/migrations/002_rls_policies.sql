@@ -60,3 +60,13 @@ CREATE TABLE IF NOT EXISTS conversations (
 CREATE INDEX idx_conversations_phone ON conversations(contact_phone);
 CREATE INDEX idx_conversations_office ON conversations(office_id);
 CREATE INDEX idx_conversations_status ON conversations(status);
+
+-- RLS for conversations and audit_log
+ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE audit_log ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY conversations_service_role ON conversations
+  FOR ALL USING (true) WITH CHECK (true);
+
+CREATE POLICY audit_log_service_role ON audit_log
+  FOR ALL USING (true) WITH CHECK (true);
