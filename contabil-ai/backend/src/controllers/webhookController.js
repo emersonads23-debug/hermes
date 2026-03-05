@@ -17,10 +17,22 @@ async function handleEvolutionWebhook(req, res) {
   res.status(200).json({ status: 'received' });
 
   try {
+    // Debug: log raw webhook payload
+    logger.info('Webhook raw payload', {
+      event: req.body.event,
+      instance: req.body.instance,
+      dataKeys: req.body.data ? Object.keys(req.body.data) : 'no data',
+      hasKey: !!req.body.data?.key,
+      remoteJid: req.body.data?.key?.remoteJid,
+      fromMe: req.body.data?.key?.fromMe,
+      hasMessage: !!req.body.data?.message,
+      messageKeys: req.body.data?.message ? Object.keys(req.body.data.message) : 'no message',
+    });
+
     // Parse the event
     const event = whatsappService.parseWebhookEvent(req.body);
 
-    logger.info('Webhook event received', { type: event.type, instance: event.instance, phone: event.phone });
+    logger.info('Webhook event parsed', { type: event.type, instance: event.instance, phone: event.phone });
 
     switch (event.type) {
       case 'message':
@@ -246,21 +258,27 @@ async function handleDocument(message, context, phone, messageId) {
 }
 
 async function resolveContext(phone, webhookInstance) {
+  logger.info('resolveContext: looking up user', { phone, webhookInstance });
+
   // 1. Find user by WhatsApp phone number
-  const { data: user } = await supabase
+  const { data: user, error: userError } = await supabase
     .from('users')
     .select('id, name, phone, active, office_id')
     .eq('phone', phone)
     .eq('active', true)
     .single();
 
+  logger.info('resolveContext: user lookup result', { found: !!user, userId: user?.id, userError: userError?.message });
+
   if (!user) return null;
 
   // 2. Find companies linked to this user via user_companies
-  const { data: userCompanies } = await supabase
+  const { data: userCompanies, error: ucError } = await supabase
     .from('user_companies')
     .select('company:companies(*, office:offices(*))')
     .eq('user_id', user.id);
+
+  logger.info('resolveContext: user_companies result', { count: userCompanies?.length, ucError: ucError?.message });
 
   if (!userCompanies || userCompanies.length === 0) return null;
 
