@@ -61,11 +61,6 @@ router.post('/:officeId/create', asyncHandler(async (req, res) => {
     const response = await evoApi.post('/instance/create', {
       instanceName,
       qrcode: true,
-      integration: 'WHATSAPP-BAILEYS',
-      webhook: `${env.apiUrl}/api/webhook/evolution`,
-      webhookByEvents: true,
-      webhookBase64: true,
-      events: ['messages.upsert', 'connection.update', 'qrcode.updated'],
     });
 
     // Save instance name to office
