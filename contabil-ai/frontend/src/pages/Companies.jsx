@@ -1,15 +1,28 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import useCrud from '../hooks/useCrud';
 import Modal from '../components/Modal';
+import { useAuth } from '../context/AuthContext';
+import api from '../services/api';
 
 export default function Companies() {
   const { data: companies, loading, create, update, remove } = useCrud('/companies');
+  const { user } = useAuth();
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState({});
   const [error, setError] = useState('');
+  const [offices, setOffices] = useState([]);
+
+  useEffect(() => {
+    if (user?.role === 'superadmin') {
+      api.get('/offices').then(res => {
+        const key = Object.keys(res.data).find(k => Array.isArray(res.data[k]));
+        setOffices(key ? res.data[key] : []);
+      }).catch(() => {});
+    }
+  }, [user]);
 
   function openCreate() {
-    setForm({ name: '', cnpj: '', email: '', phone: '' });
+    setForm({ name: '', cnpj: '', email: '', phone: '', office_id: '' });
     setError('');
     setModal('create');
   }
@@ -76,6 +89,15 @@ export default function Companies() {
         <Modal title={modal === 'create' ? 'Nova Empresa' : 'Editar Empresa'} onClose={() => setModal(null)}>
           <form onSubmit={handleSubmit}>
             {error && <div className="alert alert-danger">{error}</div>}
+            {user?.role === 'superadmin' && modal === 'create' && (
+              <div className="form-group">
+                <label>Escritorio</label>
+                <select value={form.office_id} onChange={(e) => setForm({ ...form, office_id: e.target.value })} required>
+                  <option value="">Selecione...</option>
+                  {offices.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+                </select>
+              </div>
+            )}
             <div className="form-group">
               <label>Nome</label>
               <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
