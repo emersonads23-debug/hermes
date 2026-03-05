@@ -90,17 +90,19 @@ function parseWebhookEvent(body) {
 
 // --- Send Messages ---
 
-async function sendText(to, text) {
+async function sendText(to, text, instanceName) {
+  const instance = instanceName || env.evolution.instanceName;
   try {
-    const response = await api.post(`/message/sendText/${env.evolution.instanceName}`, {
+    const response = await api.post(`/message/sendText/${instance}`, {
       number: to,
       text,
     });
-    logger.info('WhatsApp text sent', { to, messageId: response.data?.key?.id });
+    logger.info('WhatsApp text sent', { to, instance, messageId: response.data?.key?.id });
     return response.data;
   } catch (err) {
     logger.error('Failed to send WhatsApp text', {
       to,
+      instance,
       status: err.response?.status,
       error: err.response?.data || err.message,
     });
@@ -108,9 +110,10 @@ async function sendText(to, text) {
   }
 }
 
-async function sendFile(to, filePath, caption = '', mimeType = 'application/pdf') {
+async function sendFile(to, filePath, caption = '', mimeType = 'application/pdf', instanceName) {
+  const instance = instanceName || env.evolution.instanceName;
   try {
-    const response = await api.post(`/message/sendMedia/${env.evolution.instanceName}`, {
+    const response = await api.post(`/message/sendMedia/${instance}`, {
       number: to,
       mediatype: 'document',
       mimetype: mimeType,
@@ -124,9 +127,10 @@ async function sendFile(to, filePath, caption = '', mimeType = 'application/pdf'
   }
 }
 
-async function sendReaction(to, messageId, emoji) {
+async function sendReaction(to, messageId, emoji, instanceName) {
+  const instance = instanceName || env.evolution.instanceName;
   try {
-    await api.post(`/message/sendReaction/${env.evolution.instanceName}`, {
+    await api.post(`/message/sendReaction/${instance}`, {
       key: { remoteJid: `${to}@s.whatsapp.net`, id: messageId },
       reaction: emoji,
     });
@@ -137,10 +141,11 @@ async function sendReaction(to, messageId, emoji) {
 
 // --- Media Download ---
 
-async function downloadMedia(messageId) {
+async function downloadMedia(messageId, instanceName) {
+  const instance = instanceName || env.evolution.instanceName;
   try {
     const response = await api.get(
-      `/chat/getBase64FromMediaMessage/${env.evolution.instanceName}`,
+      `/chat/getBase64FromMediaMessage/${instance}`,
       { params: { messageId }, timeout: 30000 }
     );
     return response.data;

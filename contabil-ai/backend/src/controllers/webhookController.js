@@ -17,21 +17,10 @@ async function handleEvolutionWebhook(req, res) {
   res.status(200).json({ status: 'received' });
 
   try {
-    // Validate webhook signature
-    if (env.evolution.webhookSecret) {
-      const signature = req.headers['x-webhook-signature'] || req.headers['x-evolution-signature'];
-      const rawBody = JSON.stringify(req.body);
-      if (!whatsappService.validateWebhookSignature(rawBody, signature)) {
-        logger.warn('Invalid webhook signature', { ip: req.ip });
-        return;
-      }
-    } else if (env.nodeEnv === 'production') {
-      logger.error('EVOLUTION_WEBHOOK_SECRET not configured in production - rejecting webhook');
-      return;
-    }
-
     // Parse the event
     const event = whatsappService.parseWebhookEvent(req.body);
+
+    logger.info('Webhook event received', { type: event.type, instance: event.instance, phone: event.phone });
 
     switch (event.type) {
       case 'message':
@@ -39,12 +28,7 @@ async function handleEvolutionWebhook(req, res) {
         break;
 
       case 'connection_update':
-        logger.info('WhatsApp connection update', { state: event.state, reason: event.statusReason });
-        await n8nService.triggerWorkflow('connection-update', {
-          state: event.state,
-          instance: event.instance,
-          timestamp: new Date().toISOString(),
-        });
+        logger.info('WhatsApp connection update', { state: event.state, instance: event.instance });
         break;
 
       case 'qrcode':
@@ -66,20 +50,25 @@ async function handleEvolutionWebhook(req, res) {
 }
 
 async function processMessage(event) {
-  const { phone, messageId, messageType, message } = event;
+  const { phone, messageId, messageType, message, instance: webhookInstance } = event;
 
-  // Resolve user context
-  const context = await resolveContext(phone);
+  // Resolve user context - try by phone first, then by instance
+  const context = await resolveContext(phone, webhookInstance);
   if (!context) {
+    // Try to find which instance to reply from
+    const instanceName = await resolveInstanceName(webhookInstance);
     await whatsappService.sendText(
       phone,
-      'Ola! Seu numero nao esta cadastrado no ContabilAI. Entre em contato com seu escritorio de contabilidade.'
+      'Ola! Seu numero nao esta cadastrado no ContabilAI. Entre em contato com seu escritorio de contabilidade.',
+      instanceName
     );
     return;
   }
 
+  const inst = context.instanceName;
+
   // Show "processing" reaction
-  await whatsappService.sendReaction(phone, messageId, '\u23F3');
+  await whatsappService.sendReaction(phone, messageId, '\u23F3', inst);
 
   // Log incoming message
   await logMessage(context, phone, 'incoming', message, messageType);
@@ -120,18 +109,9 @@ async function processMessage(event) {
   }
 
   // Send response and clear reaction
-  await whatsappService.sendText(phone, responseText);
-  await whatsappService.sendReaction(phone, messageId, '');
+  await whatsappService.sendText(phone, responseText, inst);
+  await whatsappService.sendReaction(phone, messageId, '', inst);
   await logMessage(context, phone, 'outgoing', { text: responseText }, 'text');
-
-  // Notify n8n of processed message
-  await n8nService.triggerWorkflow('message-processed', {
-    phone,
-    messageType,
-    officeId: context.officeId,
-    companyId: context.companyId,
-    timestamp: new Date().toISOString(),
-  });
 }
 
 async function handleText(text, context, phone) {
@@ -220,7 +200,7 @@ async function handleFinancialQuery(text, context, intent, history) {
 }
 
 async function handleAudio(message, context, phone, messageId) {
-  const media = await whatsappService.downloadMedia(messageId);
+  const media = await whatsappService.downloadMedia(messageId, context.instanceName);
   const filePath = path.join(env.upload.dir, `${uuidv4()}.ogg`);
   fs.writeFileSync(filePath, Buffer.from(media.base64, 'base64'));
 
@@ -229,7 +209,7 @@ async function handleAudio(message, context, phone, messageId) {
 }
 
 async function handleImage(message, context, phone, messageId) {
-  const media = await whatsappService.downloadMedia(messageId);
+  const media = await whatsappService.downloadMedia(messageId, context.instanceName);
   const filePath = path.join(env.upload.dir, `${uuidv4()}.jpg`);
   fs.writeFileSync(filePath, Buffer.from(media.base64, 'base64'));
 
@@ -247,7 +227,7 @@ async function handleImage(message, context, phone, messageId) {
 }
 
 async function handleDocument(message, context, phone, messageId) {
-  const media = await whatsappService.downloadMedia(messageId);
+  const media = await whatsappService.downloadMedia(messageId, context.instanceName);
   const ext = message.documentMessage?.fileName?.split('.').pop() || 'pdf';
   const filePath = path.join(env.upload.dir, `${uuidv4()}.${ext}`);
   fs.writeFileSync(filePath, Buffer.from(media.base64, 'base64'));
@@ -265,7 +245,7 @@ async function handleDocument(message, context, phone, messageId) {
   return `Analisei o documento enviado:\n\n${result.analysis}`;
 }
 
-async function resolveContext(phone) {
+async function resolveContext(phone, webhookInstance) {
   const { data: user } = await supabase
     .from('whatsapp_contacts')
     .select('*, company:companies(*, office:offices(*))')
@@ -274,6 +254,8 @@ async function resolveContext(phone) {
     .single();
 
   if (!user || !user.company) return null;
+
+  const office = user.company.office;
 
   const { data: integration } = await supabase
     .from('integration_tokens')
@@ -285,10 +267,22 @@ async function resolveContext(phone) {
     officeId: user.company.office_id,
     companyId: user.company_id,
     contactId: user.id,
-    officeName: user.company.office?.name || 'Escritorio',
-    botName: user.company.office?.bot_name || 'ContabilAI',
+    officeName: office?.name || 'Escritorio',
+    botName: office?.bot_name || 'ContabilAI',
+    instanceName: office?.evolution_instance_name || webhookInstance || null,
     integrationProvider: integration?.provider || null,
   };
+}
+
+// Resolve instance name from webhook instance field (for unknown contacts)
+async function resolveInstanceName(webhookInstance) {
+  if (!webhookInstance) return null;
+  const { data: office } = await supabase
+    .from('offices')
+    .select('evolution_instance_name')
+    .eq('evolution_instance_name', webhookInstance)
+    .single();
+  return office?.evolution_instance_name || webhookInstance;
 }
 
 async function getConversationHistory(context, phone) {
