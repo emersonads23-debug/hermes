@@ -35,9 +35,13 @@ router.get('/:officeId/status', asyncHandler(async (req, res) => {
 
   try {
     const response = await evoApi.get(`/instance/connectionState/${office.evolution_instance_name}`);
-    res.json({ configured: true, instance: office.evolution_instance_name, ...response.data });
+    const evoData = response.data || {};
+    // Extract state safely — Evolution v1.8 may nest data under instance object
+    const state = typeof evoData.state === 'string' ? evoData.state
+      : evoData.instance?.state || 'unknown';
+    res.json({ configured: true, instance: office.evolution_instance_name, state });
   } catch {
-    res.json({ configured: true, instance: office.evolution_instance_name, state: 'disconnected', error: 'Evolution API indisponivel' });
+    res.json({ configured: true, instance: office.evolution_instance_name, state: 'disconnected' });
   }
 }));
 
@@ -70,7 +74,8 @@ router.post('/:officeId/create', asyncHandler(async (req, res) => {
       .eq('id', req.params.officeId);
 
     logger.info('Evolution instance created for office', { officeId: req.params.officeId, instanceName });
-    res.status(201).json({ instance: instanceName, ...response.data });
+    const qrBase64 = response.data?.qrcode?.base64 || response.data?.base64 || null;
+    res.status(201).json({ instance: instanceName, qrcode: qrBase64 });
   } catch (err) {
     const status = err.response?.status;
     if (status === 401) {
@@ -105,7 +110,11 @@ router.get('/:officeId/qrcode', asyncHandler(async (req, res) => {
 
   try {
     const response = await evoApi.get(`/instance/connect/${office.evolution_instance_name}`);
-    res.json(response.data);
+    const data = response.data || {};
+    // Evolution v1.8 may return base64 directly or nested
+    const base64 = data.base64 || data.qrcode?.base64 || data.code || null;
+    const pairingCode = data.pairingCode || null;
+    res.json({ base64, pairingCode });
   } catch (err) {
     if (err.response?.status === 401) {
       return res.status(502).json({ error: 'Falha na autenticacao com Evolution API' });
