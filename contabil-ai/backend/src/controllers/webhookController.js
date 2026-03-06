@@ -72,15 +72,24 @@ async function handleEvolutionWebhook(req, res) {
 }
 
 async function processMessage(event) {
-  const { phone, messageId, messageType, message } = event;
+  const { phone, messageId, messageType, message, instance: instanceName } = event;
 
-  // Resolve user context
-  const context = await resolveContext(phone);
+  // Resolve user context (by phone contact or by instance name)
+  const context = await resolveContext(phone, instanceName);
+
   if (!context) {
-    await whatsappService.sendText(
-      phone,
-      'Ola! Seu numero nao esta cadastrado no ContabilAI. Entre em contato com seu escritorio de contabilidade.'
-    );
+    // Try to find the office by instance name to send the "not registered" message
+    // through the correct instance instead of the (possibly disconnected) global one
+    const officeByInstance = await resolveOfficeByInstance(instanceName);
+    if (officeByInstance) {
+      await whatsappService.sendText(
+        phone,
+        'Ola! Seu numero nao esta cadastrado. Entre em contato com seu escritorio de contabilidade.',
+        officeByInstance
+      );
+    } else {
+      logger.warn('Could not resolve office for unregistered phone', { phone, instanceName });
+    }
     return;
   }
 
@@ -226,7 +235,7 @@ async function handleFinancialQuery(text, context, intent, history) {
 }
 
 async function handleAudio(message, context, phone, messageId) {
-  const media = await whatsappService.downloadMedia(messageId);
+  const media = await whatsappService.downloadMedia(messageId, context.office);
   if (media.base64 && Buffer.byteLength(media.base64, 'base64') > MAX_FILE_SIZE_BYTES) {
     return 'Desculpe, o arquivo enviado excede o limite de 25MB.';
   }
@@ -241,7 +250,7 @@ async function handleAudio(message, context, phone, messageId) {
 }
 
 async function handleImage(message, context, phone, messageId) {
-  const media = await whatsappService.downloadMedia(messageId);
+  const media = await whatsappService.downloadMedia(messageId, context.office);
   if (media.base64 && Buffer.byteLength(media.base64, 'base64') > MAX_FILE_SIZE_BYTES) {
     return 'Desculpe, o arquivo enviado excede o limite de 25MB.';
   }
@@ -270,7 +279,7 @@ const ALLOWED_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png', 'webp', 'doc', 'docx', 
 const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024; // 25MB
 
 async function handleDocument(message, context, phone, messageId) {
-  const media = await whatsappService.downloadMedia(messageId);
+  const media = await whatsappService.downloadMedia(messageId, context.office);
   const rawExt = (message.documentMessage?.fileName?.split('.').pop() || 'pdf').toLowerCase();
   const ext = ALLOWED_EXTENSIONS.includes(rawExt) ? rawExt : 'pdf';
 
@@ -300,39 +309,97 @@ async function handleDocument(message, context, phone, messageId) {
   }
 }
 
-async function resolveContext(phone) {
-  const { data: user } = await supabase
+// Resolve office data from the offices table by instance name
+async function resolveOfficeByInstance(instanceName) {
+  if (!instanceName) return null;
+
+  const { data: office } = await supabase
+    .from('offices')
+    .select('*')
+    .eq('evolution_instance_name', instanceName)
+    .eq('active', true)
+    .single();
+
+  return office || null;
+}
+
+async function resolveContext(phone, instanceName) {
+  // 1. Try to find by registered WhatsApp contact
+  const { data: contact } = await supabase
     .from('whatsapp_contacts')
     .select('*, company:companies(*, office:offices(*))')
     .eq('phone', phone)
     .eq('active', true)
     .single();
 
-  if (!user || !user.company) return null;
+  if (contact && contact.company) {
+    const { data: integration } = await supabase
+      .from('integration_tokens')
+      .select('provider')
+      .eq('office_id', contact.company.office_id)
+      .single();
 
-  const { data: integration } = await supabase
-    .from('integration_tokens')
-    .select('provider')
-    .eq('office_id', user.company.office_id)
-    .single();
+    return {
+      officeId: contact.company.office_id,
+      companyId: contact.company_id,
+      contactId: contact.id,
+      integrationProvider: integration?.provider || null,
+      office: contact.company.office,
+    };
+  }
 
-  return {
-    officeId: user.company.office_id,
-    companyId: user.company_id,
-    contactId: user.id,
-    integrationProvider: integration?.provider || null,
-    office: user.company.office,
-  };
+  // 2. Fallback: resolve office by Evolution instance name
+  //    This allows the bot to respond even without a pre-registered contact
+  if (instanceName) {
+    const office = await resolveOfficeByInstance(instanceName);
+    if (office) {
+      // Find the first company of this office as default context
+      const { data: company } = await supabase
+        .from('companies')
+        .select('*')
+        .eq('office_id', office.id)
+        .eq('active', true)
+        .limit(1)
+        .single();
+
+      const { data: integration } = await supabase
+        .from('integration_tokens')
+        .select('provider')
+        .eq('office_id', office.id)
+        .single();
+
+      logger.info('Resolved context by instance name (no registered contact)', {
+        phone, instanceName, officeId: office.id,
+      });
+
+      return {
+        officeId: office.id,
+        companyId: company?.id || null,
+        contactId: null,
+        integrationProvider: integration?.provider || null,
+        office,
+      };
+    }
+  }
+
+  return null;
 }
 
 async function getConversationHistory(context, phone) {
-  const { data } = await supabase
+  const query = supabase
     .from('messages')
     .select('direction, content')
     .eq('contact_phone', phone)
-    .eq('company_id', context.companyId)
     .order('created_at', { ascending: false })
     .limit(10);
+
+  if (context.companyId) {
+    query.eq('company_id', context.companyId);
+  } else {
+    query.eq('office_id', context.officeId);
+  }
+
+  const { data } = await query;
 
   if (!data) return [];
   return [...data].reverse().map((m) => ({
