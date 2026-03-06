@@ -24,6 +24,9 @@ const memoryRoutes = require('./routes/memory');
 
 const app = express();
 
+// Trust proxy (nginx) — required for rate limiter and correct client IP
+app.set('trust proxy', 1);
+
 // Ensure required directories exist
 for (const dir of [path.resolve(env.upload.dir), path.resolve('logs')]) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
