@@ -84,8 +84,10 @@ async function processMessage(event) {
     return;
   }
 
+  const office = context.office;
+
   // Show "processing" reaction
-  await whatsappService.sendReaction(phone, messageId, '\u23F3');
+  await whatsappService.sendReaction(phone, messageId, '\u23F3', office);
 
   // Log incoming message
   await logMessage(context, phone, 'incoming', message, messageType);
@@ -126,8 +128,8 @@ async function processMessage(event) {
   }
 
   // Send response and clear reaction
-  await whatsappService.sendText(phone, responseText);
-  await whatsappService.sendReaction(phone, messageId, '');
+  await whatsappService.sendText(phone, responseText, office);
+  await whatsappService.sendReaction(phone, messageId, '', office);
   await logMessage(context, phone, 'outgoing', { text: responseText }, 'text');
 
   // Notify n8n of processed message
@@ -319,6 +321,7 @@ async function resolveContext(phone) {
     companyId: user.company_id,
     contactId: user.id,
     integrationProvider: integration?.provider || null,
+    office: user.company.office,
   };
 }
 

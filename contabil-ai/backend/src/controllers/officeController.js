@@ -23,11 +23,21 @@ async function getById(req, res) {
 }
 
 async function create(req, res) {
-  const { name, cnpj, email, phone, adminName, adminEmail, adminPassword } = req.validated;
+  const {
+    name, cnpj, email, phone,
+    adminName, adminEmail, adminPassword,
+    evolution_instance_url, evolution_api_key, evolution_instance_name, bot_name,
+  } = req.validated;
+
+  const officeData = { name, cnpj, email, phone };
+  if (evolution_instance_url) officeData.evolution_instance_url = evolution_instance_url;
+  if (evolution_api_key) officeData.evolution_api_key = evolution_api_key;
+  if (evolution_instance_name) officeData.evolution_instance_name = evolution_instance_name;
+  if (bot_name) officeData.bot_name = bot_name;
 
   const { data: office, error: officeErr } = await supabase
     .from('offices')
-    .insert({ name, cnpj, email, phone })
+    .insert(officeData)
     .select()
     .single();
 
@@ -62,11 +72,11 @@ async function update(req, res) {
 async function remove(req, res) {
   const { error } = await supabase
     .from('offices')
-    .update({ active: false })
+    .delete()
     .eq('id', req.params.id);
 
   if (error) return res.status(400).json({ error: error.message });
-  res.json({ message: 'Escritorio desativado' });
+  res.json({ message: 'Escritorio excluido' });
 }
 
 module.exports = { list, getById, create, update, remove };

@@ -5,11 +5,31 @@ const logger = require('../config/logger');
 
 const REQUEST_TIMEOUT = 15000;
 
+// Default API client (global/env config)
 const api = axios.create({
   baseURL: env.evolution.apiUrl,
   headers: { apikey: env.evolution.apiKey },
   timeout: REQUEST_TIMEOUT,
 });
+
+// Create an API client for a specific office's Evolution instance
+function getOfficeApi(office) {
+  if (office && office.evolution_instance_url && office.evolution_api_key) {
+    return axios.create({
+      baseURL: office.evolution_instance_url,
+      headers: { apikey: office.evolution_api_key },
+      timeout: REQUEST_TIMEOUT,
+    });
+  }
+  return api;
+}
+
+function getInstanceName(office) {
+  if (office && office.evolution_instance_name) {
+    return office.evolution_instance_name;
+  }
+  return env.evolution.instanceName;
+}
 
 // --- Webhook Signature Validation ---
 
@@ -96,18 +116,22 @@ function parseWebhookEvent(body) {
 }
 
 // --- Send Messages ---
+// All send functions accept an optional `office` parameter to use per-office instances
 
-async function sendText(to, text) {
+async function sendText(to, text, office = null) {
+  const client = getOfficeApi(office);
+  const instanceName = getInstanceName(office);
   try {
-    const response = await api.post(`/message/sendText/${env.evolution.instanceName}`, {
+    const response = await client.post(`/message/sendText/${instanceName}`, {
       number: to,
       text,
     });
-    logger.info('WhatsApp text sent', { to, messageId: response.data?.key?.id });
+    logger.info('WhatsApp text sent', { to, messageId: response.data?.key?.id, instance: instanceName });
     return response.data;
   } catch (err) {
     logger.error('Failed to send WhatsApp text', {
       to,
+      instance: instanceName,
       status: err.response?.status,
       error: err.response?.data || err.message,
     });
@@ -115,9 +139,11 @@ async function sendText(to, text) {
   }
 }
 
-async function sendFile(to, filePath, caption = '', mimeType = 'application/pdf') {
+async function sendFile(to, filePath, caption = '', mimeType = 'application/pdf', office = null) {
+  const client = getOfficeApi(office);
+  const instanceName = getInstanceName(office);
   try {
-    const response = await api.post(`/message/sendMedia/${env.evolution.instanceName}`, {
+    const response = await client.post(`/message/sendMedia/${instanceName}`, {
       number: to,
       mediatype: 'document',
       mimetype: mimeType,
@@ -131,9 +157,11 @@ async function sendFile(to, filePath, caption = '', mimeType = 'application/pdf'
   }
 }
 
-async function sendReaction(to, messageId, emoji) {
+async function sendReaction(to, messageId, emoji, office = null) {
+  const client = getOfficeApi(office);
+  const instanceName = getInstanceName(office);
   try {
-    await api.post(`/message/sendReaction/${env.evolution.instanceName}`, {
+    await client.post(`/message/sendReaction/${instanceName}`, {
       key: { remoteJid: `${to}@s.whatsapp.net`, id: messageId },
       reaction: emoji,
     });
@@ -144,10 +172,12 @@ async function sendReaction(to, messageId, emoji) {
 
 // --- Media Download ---
 
-async function downloadMedia(messageId) {
+async function downloadMedia(messageId, office = null) {
+  const client = getOfficeApi(office);
+  const instanceName = getInstanceName(office);
   try {
-    const response = await api.get(
-      `/chat/getBase64FromMediaMessage/${env.evolution.instanceName}`,
+    const response = await client.get(
+      `/chat/getBase64FromMediaMessage/${instanceName}`,
       { params: { messageId }, timeout: 30000 }
     );
     return response.data;
@@ -159,20 +189,24 @@ async function downloadMedia(messageId) {
 
 // --- Instance Management ---
 
-async function getInstanceStatus() {
+async function getInstanceStatus(office = null) {
+  const client = getOfficeApi(office);
+  const instanceName = getInstanceName(office);
   try {
-    const response = await api.get(`/instance/connectionState/${env.evolution.instanceName}`);
+    const response = await client.get(`/instance/connectionState/${instanceName}`);
     return response.data;
   } catch (err) {
-    logger.error('Failed to get instance status', { error: err.message });
+    logger.error('Failed to get instance status', { instance: instanceName, error: err.message });
     return { state: 'unknown', error: err.message };
   }
 }
 
-async function createInstance() {
+async function createInstance(office = null) {
+  const client = getOfficeApi(office);
+  const instanceName = getInstanceName(office);
   try {
-    const response = await api.post('/instance/create', {
-      instanceName: env.evolution.instanceName,
+    const response = await client.post('/instance/create', {
+      instanceName,
       qrcode: true,
       integration: 'WHATSAPP-BAILEYS',
       webhook: `${env.apiUrl}/api/webhook/evolution`,
@@ -184,7 +218,7 @@ async function createInstance() {
         'qrcode.updated',
       ],
     });
-    logger.info('Evolution instance created', { instance: env.evolution.instanceName });
+    logger.info('Evolution instance created', { instance: instanceName });
     return response.data;
   } catch (err) {
     // Instance may already exist
@@ -220,4 +254,6 @@ module.exports = {
   getInstanceStatus,
   createInstance,
   healthCheck,
+  getOfficeApi,
+  getInstanceName,
 };

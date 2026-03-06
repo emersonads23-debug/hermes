@@ -14,6 +14,10 @@ const createSchema = z.object({
   adminName: z.string().min(2),
   adminEmail: z.string().email(),
   adminPassword: z.string().min(8),
+  evolution_instance_url: z.string().url().optional().or(z.literal('')),
+  evolution_api_key: z.string().optional(),
+  evolution_instance_name: z.string().optional(),
+  bot_name: z.string().optional(),
 });
 
 const updateSchema = z.object({
@@ -21,6 +25,10 @@ const updateSchema = z.object({
   cnpj: z.string().min(14).max(18).optional(),
   email: z.string().email().optional(),
   phone: z.string().optional(),
+  evolution_instance_url: z.string().url().optional().or(z.literal('')),
+  evolution_api_key: z.string().optional(),
+  evolution_instance_name: z.string().optional(),
+  bot_name: z.string().optional(),
 });
 
 router.use(authenticate);
