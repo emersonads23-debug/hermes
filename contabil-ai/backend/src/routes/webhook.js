@@ -2,14 +2,31 @@ const { Router } = require('express');
 const crypto = require('crypto');
 const env = require('../config/env');
 const logger = require('../config/logger');
+const supabase = require('../config/supabase');
 const webhookController = require('../controllers/webhookController');
 
 const router = Router();
 
-function webhookAuth(req, res, next) {
-  // Check Evolution API key header
-  if (req.headers['apikey'] && req.headers['apikey'] === env.evolution.apiKey) {
+async function webhookAuth(req, res, next) {
+  const apikey = req.headers['apikey'];
+
+  // Check global Evolution API key
+  if (apikey && env.evolution.apiKey && apikey === env.evolution.apiKey) {
     return next();
+  }
+
+  // Check per-office Evolution API keys
+  if (apikey) {
+    const { data: office } = await supabase
+      .from('offices')
+      .select('id')
+      .eq('evolution_api_key', apikey)
+      .single();
+
+    if (office) {
+      req.officeId = office.id;
+      return next();
+    }
   }
 
   // Check HMAC webhook signature
@@ -25,7 +42,7 @@ function webhookAuth(req, res, next) {
     }
   }
 
-  logger.warn('Webhook authentication failed', { ip: req.ip });
+  logger.warn('Webhook authentication failed', { ip: req.ip, hasApikey: !!apikey });
   return res.status(401).json({ error: 'Unauthorized' });
 }
 
